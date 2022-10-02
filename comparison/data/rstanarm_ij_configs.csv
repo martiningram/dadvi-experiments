@@ -1,0 +1,66 @@
+subdir,model_name,dataset,formula_str,rstan_fun,family,num_obs_var,exchangeable_col,valid,rerun,num_boots,note
+ARM/Ch.0,test,test1,y ~ x,stan_glm,gaussian(),N,,TRUE,,,Test model
+ARM/Ch.0,test_rstanarm,test2,y ~ x + (1 + x|z1) + (1|z1_z2),stan_glmer,gaussian(),N,z1,TRUE,,,Test model
+ARM/Ch.3,kidscore_momhs,kidscore,kid_score ~ mom_hs,stan_glm,gaussian(),N,,TRUE,,,
+ARM/Ch.3,kidscore_momiq,kidscore,kid_score ~ mom_iq,stan_glm,gaussian(),N,,TRUE,,,
+ARM/Ch.3,kidiq_multi_preds,kidscore,kid_score ~ mom_hs + mom_iq,stan_glm,gaussian(),N,,TRUE,,,
+ARM/Ch.3,kidiq_interaction,kidscore,kid_score ~ mom_hs + mom_iq + mom_hs:mom_iq,stan_glm,gaussian(),N,,TRUE,,,
+ARM/Ch.4,earn_height,earnings,earn ~ height,stan_glm,gaussian(),N,,TRUE,,,
+ARM/Ch.4,logearn_height,earnings,log(earn) ~ height,stan_glm,gaussian(),N,,TRUE,,,
+ARM/Ch.4,logearn_height_male,earnings,log(earn) ~ height + male,stan_glm,gaussian(),N,,TRUE,,,
+ARM/Ch.4,logearn_interaction,earnings,log(earn) ~ height + male + height:male,stan_glm,gaussian(),N,,TRUE,,,
+ARM/Ch.4,logearn_logheight,earnings,log(earn) ~ log(height) + male,stan_glm,gaussian(),N,,TRUE,,,
+ARM/Ch.4,kidscore_momwork,kidscore,kid_score ~ as.factor(mom_work),stan_glm,gaussian(),N,,TRUE,,,
+ARM/Ch.4,mesquite,mesquite,weight ~ diam1 + diam2 + canopy_height + total_height + density + group,stan_glm,gaussian(),N,,TRUE,,,
+ARM/Ch.4,mesquite_log,mesquite,log(weight) ~ log(diam1) + log(diam2) + log(canopy_height) + log(total_height) + log(density) + group,stan_glm,gaussian(),N,,TRUE,,,
+ARM/Ch.4,mesquite_va,mesquite,log(weight) ~ log(I(diam1 * diam2 * canopy_height)) + log(I(diam1 * diam2)) + group,stan_glm,gaussian(),N,,TRUE,,,
+ARM/Ch.4,mesquite_vas,mesquite,log(weight) ~ log(I(diam1 * diam2 * canopy_height)) + log(I(diam1 * diam2)) + log(I(diam1 / diam2)) + log(total_height) + log(density) + group,stan_glm,gaussian(),N,,TRUE,,,
+ARM/Ch.4,mesquite_vash,mesquite,log(weight) ~ log(I(diam1 * diam2 * canopy_height)) + log(I(diam1 * diam2)) + log(I(diam1 / diam2)) + log(total_height) + group,stan_glm,gaussian(),N,,TRUE,,,
+ARM/Ch.4,mesquite_volume,mesquite,log(weight) ~ log(I(diam1 * diam2 * canopy_height)) + log(I(diam1 * diam2)) + group,stan_glm,gaussian(),N,,TRUE,,,
+ARM/Ch.5,nes2000_vote,vote,vote ~ income,stan_glm,"binomial(link=""logit"")",N,,TRUE,,,
+ARM/Ch.5,separation,separation,y ~ x,stan_glm,"binomial(link=""logit"")",N,,TRUE,,,
+ARM/Ch.5,wells_dist100,wells,switched ~ dist100,stan_glm,"binomial(link=""logit"")",N,,TRUE,,,
+ARM/Ch.5,wells_d100ars,wells,switched ~ dist100 + arsenic,stan_glm,"binomial(link=""logit"")",N,,TRUE,,,
+ARM/Ch.5,wells_dae,wells,switched ~ dist100 + arsenic + educ4,stan_glm,"binomial(link=""logit"")",N,,TRUE,,,
+ARM/Ch.5,wells_daae_c,wells,switched ~ c_dist100 + c_arsenic + c_dist100:c_arsenic + assoc + educ4,stan_glm,"binomial(link=""logit"")",N,,TRUE,,,
+ARM/Ch.5,wells_dae_c,wells,switched ~ c_dist100 + c_arsenic + c_dist100:c_arsenic + educ4,stan_glm,"binomial(link=""logit"")",N,,TRUE,,,
+ARM/Ch.5,wells_dae_inter,wells,switched ~ dist100 + arsenic + educ4 + dist100:arsenic,stan_glm,"binomial(link=""logit"")",N,,TRUE,,,
+ARM/Ch.5,wells_dae_inter_c,wells,switched ~ c_dist100 + c_arsenic + c_educ4 + c_dist100:c_arsenic + c_dist100:c_educ4 + c_arsenic:c_educ4,stan_glm,"binomial(link=""logit"")",N,,TRUE,,,
+ARM/Ch.5,wells_interaction,wells,switched ~ dist100 + arsenic + dist100:arsenic,stan_glm,"binomial(link=""logit"")",N,,TRUE,,,
+ARM/Ch.5,wells_interaction_c,wells,switched ~ c_dist100 + c_arsenic + c_dist100:c_arsenic,stan_glm,"binomial(link=""logit"")",N,,TRUE,,,
+ARM/Ch.5,wells_predicted,wells,switched ~ c_dist100 + c_arsenic + c_educ4 + c_dist100:c_arsenic + c_dist100:c_educ4 + c_arsenic:c_educ4,stan_glm,"binomial(link=""logit"")",N,,TRUE,,,
+ARM/Ch.5,wells_predicted_log,wells,switched ~ c_dist100 + c_log_arsenic + c_educ4 + c_dist100:c_log_arsenic + c_dist100:c_educ4 + c_log_arsenic:c_educ4,stan_glm,"binomial(link=""logit"")",N,,TRUE,,,
+ARM/Ch.6,earnings1,earnings,earn_pos ~ height + male,stan_glm,"binomial(link=""logit"")",N,,TRUE,,,
+ARM/Ch.6,earnings2,earnings,log(earnings) ~ height + sex,stan_glm,gaussian(),N,,TRUE,,,
+ARM/Ch.7,congress,congress,vote_88 ~ vote_86 + incumbency_88,stan_glm,gaussian(),N,,TRUE,,,
+ARM/Ch.7,earnings1,earnings,earn_pos ~ height + male,stan_glm,"binomial(link=""logit"")",N,,TRUE,,,
+ARM/Ch.7,earnings_interactions,earnings,log(earnings) ~ height + sex1 + height:sex1,stan_glm,gaussian(),N,,TRUE,,,
+ARM/Ch.7,earnings2,earnings,log(earnings) ~ height + sex,stan_glm,gaussian(),N,,TRUE,,,
+ARM/Ch.10,sesame_one_pred_2b,sesame,y ~ watched_hat,stan_glm,gaussian(),N,,TRUE,,,
+ARM/Ch.10,sesame_one_pred_a,sesame,watched ~ encouraged,stan_glm,gaussian(),N,,TRUE,,,
+ARM/Ch.10,sesame_one_pred_b,sesame,y ~ encouraged,stan_glm,gaussian(),N,,TRUE,,,
+ARM/Ch.10,ideo_reparam,ideo,score1 ~ party + z1 + z2,stan_glm,gaussian(),N,,TRUE,,,
+ARM/Ch.10,sesame_multi_preds_3a,sesame,y ~ encouraged + pretest + factor(site) + setting,stan_glm,gaussian(),N,,TRUE,,,
+ARM/Ch.10,sesame_multi_preds_3b,sesame,y ~ watched_hat + pretest + factor(site) + setting,stan_glm,gaussian(),N,,TRUE,,,
+ARM/Ch.12,radon_complete_pool,radon,y ~ x,stan_glm,gaussian(),N,,TRUE,,,
+ARM/Ch.12,radon_group,radon,y ~ x + u + (1 | county),stan_glmer,gaussian(),N,county,TRUE,,,
+ARM/Ch.12,radon_intercept,radon,y ~ 1 + (1 | county),stan_glmer,gaussian(),N,county,TRUE,,,
+ARM/Ch.12,radon_no_pool,radon,y ~ x + (1 | county),stan_glmer,gaussian(),N,county,TRUE,,,
+ARM/Ch.12,radon_group_chr,radon,y ~ x + u + (1 | county),stan_glmer,gaussian(),N,county,TRUE,,,
+ARM/Ch.12,radon_intercept_chr,radon,y ~ 1 + (1 | county),stan_glmer,gaussian(),N,county,TRUE,,,
+ARM/Ch.12,radon_no_pool_chr,radon,y ~ x + (1 | county),stan_glmer,gaussian(),N,county,TRUE,,,
+ARM/Ch.13,earnings_vary_si,earnings,log(earn) ~ 1 + (1 + height | eth),stan_glmer,gaussian(),N,,TRUE,TRUE,,The individual is the only sensible exchangeable unit.
+ARM/Ch.13,radon_inter_vary,radon,y ~ u + u:x + (1 + x | county),stan_glmer,gaussian(),N,county,TRUE,,,There are a lot of counties
+ARM/Ch.13,radon_vary_si,radon,y ~ 1 + (1 + x | county),stan_glmer,gaussian(),N,county,TRUE,,,There are a lot of counties
+ARM/Ch.13,earnings_latin_square,earnings,y ~ 1 + (1 + x | eth) + (1 + x | age) + (1 + x | eth:age),stan_glmer,gaussian(),N,,TRUE,TRUE,,The individual is the only sensible exchangeable unit.
+ARM/Ch.13,pilots,pilots,y ~ 1 + (1 | group_id) + (1 | scenario_id),stan_glmer,gaussian(),N,,TRUE,TRUE,,This is a small dataset and the individual should be exchangeable.
+ARM/Ch.14,election88,election,y ~ black + female + (1 | state),stan_glmer,"binomial(link=""logit"")",N,state,TRUE,,,Only state has enough observations to be the unit
+ARM/Ch.14,election88_full,election,y ~ black + female + v_prev_full + (1 | age) + (1 | age_edu) + (1 | state) + (1 | region_full),stan_glmer,"binomial(link=""logit"")",N,state,TRUE,TRUE,,Only state has enough observations to be the unit
+ARM/Ch.20,hiv,hiv,y ~ 1 + (1 + time | person),stan_glmer,gaussian(),N,person,TRUE,,,Person is a good unit
+ARM/Ch.20,hiv_inter,hiv,y ~ time:treatment + (1 + time | person),stan_glmer,gaussian(),N,person,TRUE,,,Person is a good unit
+ARM/Ch.23,electric_one_pred,electric,post_test ~ treatment,stan_glm,gaussian(),N,pair,TRUE,TRUE,,
+ARM/Ch.23,electric_multi_preds,electric,post_test ~ treatment + pre_test,stan_glm,gaussian(),N,pair,TRUE,TRUE,,
+ARM/Ch.23,electric,electric,y ~ treatment + (1 | pair),stan_glmer,gaussian(),N,pair,TRUE,,,There are a lot of pairs
+ARM/Ch.23,electric_1a,electric,y ~ 1 + (1 | pair) + (treatment | grade),stan_glmer,gaussian(),N,pair,TRUE,,,There are a lot of pairs
+ARM/Ch.23,electric_1b,electric,y ~ treatment + pre_test + (1 | pair),stan_glmer,gaussian(),N,pair,TRUE,,,There are a lot of pairs
+ARM/Ch.23,electric_1c,electric,y ~ 1 + (1 | pair) + (treatment + pre_test | grade),stan_glmer,gaussian(),N,pair,TRUE,TRUE,50,There are a lot of pairs
