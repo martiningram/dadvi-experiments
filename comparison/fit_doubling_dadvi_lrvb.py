@@ -2,16 +2,13 @@
 # It's not hard to write one, but hopefully this makes sense to you.
 import sys
 from utils import load_model_by_name, estimate_kl_fresh_draws
-from dadvi.core import (
-    find_dadvi_optimum,
-    compute_lrvb_covariance_direct_method,
-    get_lrvb_draws,
-)
+from dadvi.core import get_lrvb_draws
 from dadvi.jax import build_dadvi_funs
 from dadvi.pymc.pymc_to_jax import get_jax_functions_from_pymc
 import numpy as np
 import time
 from dadvi.utils import opt_callback_fun
+from dadvi.doubling_dadvi import optimise_dadvi_by_doubling
 from dadvi.pymc.pymc_to_jax import transform_dadvi_draws
 from os import makedirs
 from os.path import join
@@ -19,6 +16,9 @@ import pickle
 
 
 if __name__ == "__main__":
+    import multiprocessing
+
+    multiprocessing.set_start_method("fork")
 
     model_name = sys.argv[1]
     m = load_model_by_name(model_name)
@@ -26,28 +26,20 @@ if __name__ == "__main__":
     # This will store the sequence of parameters
     opt_callback_fun.opt_sequence = []
 
-    M = 30
-    seed = 2
-    np.random.seed(seed)
-
     start_time = time.time()
     jax_funs = get_jax_functions_from_pymc(m)
     dadvi_funs = build_dadvi_funs(jax_funs["log_posterior_fun"])
     init_means = np.zeros(jax_funs["n_params"])
     init_log_vars = np.zeros(jax_funs["n_params"]) - 3
     init_var_params = np.concatenate([init_means, init_log_vars])
-    zs = np.random.randn(M, jax_funs["n_params"])
-    opt = find_dadvi_optimum(
-        init_params=init_var_params,
-        zs=zs,
-        dadvi_funs=dadvi_funs,
-        verbose=True,
-        callback_fun=opt_callback_fun,
+    opt_result = optimise_dadvi_by_doubling(
+        init_var_params, dadvi_funs, seed=2, verbose=True, start_m_power=3
     )
+
+    opt = opt_result["dadvi_result"]["optimisation_result"]
     dadvi_res = opt["opt_result"].x
-    lrvb_cov = compute_lrvb_covariance_direct_method(
-        dadvi_res, zs, dadvi_funs.kl_est_hvp_fun
-    )
+    zs = opt_result["zs"]
+    lrvb_cov = opt_result["dadvi_result"]["lrvb_covariance"]
     finish_time = time.time()
 
     runtime_dadvi = finish_time - start_time

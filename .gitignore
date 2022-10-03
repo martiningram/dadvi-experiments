@@ -1,0 +1,6 @@
+*.npz
+*.pkl
+*.json
+*.csv
+*.netcdf
+*.pyc
