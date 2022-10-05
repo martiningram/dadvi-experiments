@@ -1,3 +1,7 @@
+comparison/analysis/.ipynb_checkpoints/**
+comparison/blade_runs/**
+venv/**
+
 *.npz
 *.pkl
 *.json
