@@ -39,7 +39,13 @@ if __name__ == "__main__":
     makedirs(join(target_dir, "runtimes"), exist_ok=True)
     makedirs(join(target_dir, "draw_dicts"), exist_ok=True)
 
-    fit_result_nuts.to_netcdf(join(target_dir, "netcdfs", model_name + ".netcdf"))
+    try:
+        fit_result_nuts.to_netcdf(join(target_dir, "netcdfs", model_name + ".netcdf"))
+    except RuntimeError as e:
+        print('NetCDF saving failed with error:')
+        print(e)
+        print('Continuing.')
+
     draw_dict = arviz_to_draw_dict(fit_result_nuts)
     np.savez(join(target_dir, "draw_dicts", model_name + ".npz"), **draw_dict)
 
