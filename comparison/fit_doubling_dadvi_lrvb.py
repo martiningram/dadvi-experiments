@@ -40,6 +40,9 @@ if __name__ == "__main__":
     dadvi_res = opt["opt_result"].x
     zs = opt_result["zs"]
     lrvb_cov = opt_result["dadvi_result"]["lrvb_covariance"]
+
+    print(opt_result['M'], opt_result['ratio'])
+
     finish_time = time.time()
 
     runtime_dadvi = finish_time - start_time
@@ -57,16 +60,16 @@ if __name__ == "__main__":
         keep_untransformed=True,
     )
 
-    makedirs("lrvb_results/draw_dicts", exist_ok=True)
-    makedirs("lrvb_results/lrvb_info", exist_ok=True)
-    np.savez(join("lrvb_results/draw_dicts", model_name + ".npz"), **dadvi_dict)
+    makedirs("lrvb_doubling_results/draw_dicts", exist_ok=True)
+    makedirs("lrvb_doubling_results/lrvb_info", exist_ok=True)
+    np.savez(join("lrvb_doubling_results/draw_dicts", model_name + ".npz"), **dadvi_dict)
 
     kl_hist_dadvi = [
         estimate_kl_fresh_draws(dadvi_funs, cur_hist["theta"])
         for cur_hist in dadvi_opt_sequence
     ]
 
-    with open(join("lrvb_results", "lrvb_info", model_name + ".pkl"), "wb") as f:
+    with open(join("lrvb_doubling_results", "lrvb_info", model_name + ".pkl"), "wb") as f:
         pickle.dump(
             {
                 "opt_result": opt,

@@ -20,7 +20,8 @@ n_reruns = 100
 model_name = sys.argv[1]
 m = load_model_by_name(model_name)
 
-target_dir = f"./dadvi_coverage_results/{model_name}"
+base_target_dir = '/media/martin/External Drive/projects/lrvb_paper/coverage_redone_2022'
+target_dir = os.path.join(base_target_dir, model_name)
 os.makedirs(target_dir, exist_ok=True)
 
 jax_funs = get_jax_functions_from_pymc(m)

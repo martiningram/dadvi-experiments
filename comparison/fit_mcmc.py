@@ -21,11 +21,12 @@ if __name__ == "__main__":
     start_time = time.time()
 
     with model as m:
-        if model_name in ['potus', 'occ_det']:
-            fit_result_nuts = pm.sample(cores=1, chains=4)
-        else:
-            # Use the defaults
-            fit_result_nuts = pm.sample()
+        # Running in parallel gets stuck for some models. Fall back to sequential.
+        fit_result_nuts = pm.sample(cores=1, chains=4)
+        # if model_name in ['potus', 'occ_det']:
+        # else:
+        #     # Use the defaults
+        #     fit_result_nuts = pm.sample()
 
     end_time = time.time()
     runtime = end_time - start_time
