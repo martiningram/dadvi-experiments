@@ -77,7 +77,7 @@ if __name__ == "__main__":
         for cur_hist in dadvi_opt_sequence
     ]
 
-    with open(join(target_dir, "lrvb_results", "lrvb_info", model_name + ".pkl"), "wb") as f:
+    with open(join(target_dir, "lrvb_info", model_name + ".pkl"), "wb") as f:
         pickle.dump(
             {
                 "opt_result": opt,

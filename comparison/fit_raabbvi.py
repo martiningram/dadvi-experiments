@@ -16,6 +16,7 @@ import pickle
 
 
 model_name = sys.argv[1]
+target_dir = sys.argv[2]
 m = load_model_by_name(model_name)
 seed = 2
 
@@ -57,12 +58,14 @@ kl_hist_viabel = [
     for cur_params in viabel_result["variational_param_history"][::compute_kl_every]
 ]
 
-makedirs("raabbvi_results/draw_dicts", exist_ok=True)
-makedirs("raabbvi_results/info", exist_ok=True)
-np.savez(join("raabbvi_results/draw_dicts", model_name + ".npz"), **viabel_dict)
+target_dir = join(target_dir, 'raabbvi_results')
+
+makedirs(join(target_dir, "draw_dicts"), exist_ok=True)
+makedirs(join(target_dir, "info"), exist_ok=True)
+np.savez(join(target_dir, "draw_dicts", model_name + ".npz"), **viabel_dict)
 
 # TODO: Work out what else I can pickle
-with open(join("raabbvi_results", "info", model_name + ".pkl"), "wb") as f:
+with open(join(target_dir, "info", model_name + ".pkl"), "wb") as f:
     pickle.dump(
         {
             "opt_result": viabel_opt_params,

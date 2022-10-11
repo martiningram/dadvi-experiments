@@ -14,6 +14,7 @@ if __name__ == "__main__":
 
     model_name = sys.argv[1]
     method = sys.argv[2]
+    target_dir = sys.argv[3]
     model = load_model_by_name(model_name)
 
     print("Fitting")
@@ -28,7 +29,7 @@ if __name__ == "__main__":
     runtime = end_time - start_time
     print("Done")
 
-    base_dir = f"s{method}_results"
+    base_dir = join(target_dir, f"s{method}_results")
 
     makedirs(join(base_dir, "draw_dicts"), exist_ok=True)
     makedirs(join(base_dir, "info"), exist_ok=True)
