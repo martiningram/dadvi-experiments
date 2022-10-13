@@ -23,7 +23,11 @@ if __name__ == "__main__":
 
     with model as m:
         # Running in parallel gets stuck for some models. Fall back to sequential.
-        fit_result_nuts = pm.sample(cores=1, chains=4)
+        # Microcredit strangely is killed on its third chain, so run only two.
+        if model_name == 'microcredit':
+            fit_result_nuts = pm.sample(cores=1, chains=2)
+        else:
+            fit_result_nuts = pm.sample(cores=1, chains=4)
         # if model_name in ['potus', 'occ_det']:
         # else:
         #     # Use the defaults
