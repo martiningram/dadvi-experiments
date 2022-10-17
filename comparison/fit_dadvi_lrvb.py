@@ -21,6 +21,7 @@ import pickle
 if __name__ == "__main__":
 
     model_name = sys.argv[1]
+    target_dir = sys.argv[2]
     m = load_model_by_name(model_name)
 
     # This will store the sequence of parameters
@@ -65,16 +66,18 @@ if __name__ == "__main__":
         keep_untransformed=True,
     )
 
-    makedirs("lrvb_results/draw_dicts", exist_ok=True)
-    makedirs("lrvb_results/lrvb_info", exist_ok=True)
-    np.savez(join("lrvb_results/draw_dicts", model_name + ".npz"), **dadvi_dict)
+    target_dir = join(target_dir, "lrvb_results")
+
+    makedirs(join(target_dir, "draw_dicts"), exist_ok=True)
+    makedirs(join(target_dir, "lrvb_info"), exist_ok=True)
+    np.savez(join(target_dir, "draw_dicts", model_name + ".npz"), **dadvi_dict)
 
     kl_hist_dadvi = [
         estimate_kl_fresh_draws(dadvi_funs, cur_hist["theta"])
         for cur_hist in dadvi_opt_sequence
     ]
 
-    with open(join("lrvb_results", "lrvb_info", model_name + ".pkl"), "wb") as f:
+    with open(join(target_dir, "lrvb_info", model_name + ".pkl"), "wb") as f:
         pickle.dump(
             {
                 "opt_result": opt,
