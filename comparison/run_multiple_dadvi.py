@@ -10,6 +10,7 @@ from dadvi.jax import build_dadvi_funs
 from dadvi.pymc.pymc_to_jax import get_jax_functions_from_pymc
 from dadvi.doubling_dadvi import (
     optimise_dadvi_by_doubling,
+    fit_dadvi_and_estimate_covariances
 )
 from dadvi.core import find_dadvi_optimum
 import numpy as np
@@ -20,7 +21,7 @@ n_reruns = 100
 model_name = sys.argv[1]
 m = load_model_by_name(model_name)
 
-base_target_dir = '/media/martin/External Drive/projects/lrvb_paper/coverage_redone_2022'
+base_target_dir = '/media/martin/External Drive/projects/lrvb_paper/coverage_redone_m_16'
 target_dir = os.path.join(base_target_dir, model_name)
 os.makedirs(target_dir, exist_ok=True)
 
@@ -36,7 +37,7 @@ opt_result = optimise_dadvi_by_doubling(
     dadvi_funs,
     seed=2,
     verbose=True,
-    start_m_power=3,
+    start_m_power=4,
     max_freq_to_posterior_ratio=0.5,
 )
 
@@ -52,20 +53,21 @@ reference_results = {"means": means, "freq_sds": freq_sds, "m_picked": m_picked}
 
 rerun_results = list()
 
-# For the other runs, we do not need to compute covariances -- this makes things faster.
 for cur_run in range(n_reruns):
 
     cur_seed = 1000 + cur_run
     np.random.seed(cur_seed)
     cur_z = np.random.randn(m_picked, means.shape[0])
 
-    opt = find_dadvi_optimum(
-        init_params=init_var_params, zs=cur_z, dadvi_funs=dadvi_funs
-    )
+    result = fit_dadvi_and_estimate_covariances(init_var_params, cur_z, dadvi_funs=dadvi_funs)
+
+    freq_sds_rerun = result['frequentist_mean_sds']
+
+    opt = result['optimisation_result']
 
     rerun_means = np.split(opt["opt_result"].x, 2)[0]
 
-    rerun_results.append({"means": rerun_means, "seed": cur_seed})
+    rerun_results.append({"means": rerun_means, "seed": cur_seed, 'freq_sds': freq_sds_rerun})
 
 rerun_df = pd.DataFrame(rerun_results)
 
