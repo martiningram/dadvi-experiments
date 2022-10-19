@@ -1,3 +1,4 @@
+from jax.config import config; config.update("jax_enable_x64", True)
 # Fit using DADVI. This is the verbose version; we'll want a higher-level API down the road.
 # It's not hard to write one, but hopefully this makes sense to you.
 import sys
