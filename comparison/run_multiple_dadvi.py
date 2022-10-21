@@ -1,3 +1,4 @@
+from jax.config import config; config.update("jax_enable_x64", True)
 """
 Run DADVI multiple times to investigate coverage.
 TODO: Consider moving into a separate folder (but then need to make utils available also)
@@ -19,9 +20,10 @@ import pandas as pd
 n_reruns = 100
 
 model_name = sys.argv[1]
+min_m_power = int(sys.argv[2])
 m = load_model_by_name(model_name)
 
-base_target_dir = '/media/martin/External Drive/projects/lrvb_paper/coverage_redone_m_64'
+base_target_dir = f'/media/martin/External Drive/projects/lrvb_paper/coverage_redone/M_{2**min_m_power}'
 target_dir = os.path.join(base_target_dir, model_name)
 os.makedirs(target_dir, exist_ok=True)
 
@@ -37,7 +39,7 @@ opt_result = optimise_dadvi_by_doubling(
     dadvi_funs,
     seed=2,
     verbose=True,
-    start_m_power=6,
+    start_m_power=min_m_power,
     max_freq_to_posterior_ratio=0.5,
 )
 
