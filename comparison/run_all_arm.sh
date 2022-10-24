@@ -11,7 +11,9 @@ while IFS= read -r MODEL_NAME; do
     # python fit_doubling_dadvi_lrvb.py "$MODEL_NAME"
 
     # Run coverage
-    python run_multiple_dadvi.py "$MODEL_NAME"
+    python run_multiple_dadvi.py "$MODEL_NAME" 4
+    python run_multiple_dadvi.py "$MODEL_NAME" 5
+    python run_multiple_dadvi.py "$MODEL_NAME" 6
 
 done < all_arm_names.txt
 
