@@ -1,4 +1,6 @@
-from jax.config import config; config.update("jax_enable_x64", True)
+from jax.config import config
+
+config.update("jax_enable_x64", True)
 # Fit using DADVI. This is the verbose version; we'll want a higher-level API down the road.
 # It's not hard to write one, but hopefully this makes sense to you.
 import sys
@@ -7,6 +9,7 @@ from dadvi.core import (
     find_dadvi_optimum,
     compute_lrvb_covariance_direct_method,
     get_lrvb_draws,
+    compute_lrvb_covariance_cg,
 )
 from dadvi.jax import build_dadvi_funs
 from dadvi.pymc.pymc_to_jax import get_jax_functions_from_pymc
@@ -23,7 +26,13 @@ if __name__ == "__main__":
 
     model_name = sys.argv[1]
     target_dir = sys.argv[2]
+    lrvb_method = sys.argv[3]
     m = load_model_by_name(model_name)
+
+    assert lrvb_method in [
+        "Direct",
+        "CG",
+    ], "LRVB method has to be either 'Direct' or 'CG'!"
 
     # This will store the sequence of parameters
     opt_callback_fun.opt_sequence = []
@@ -47,9 +56,14 @@ if __name__ == "__main__":
         callback_fun=opt_callback_fun,
     )
     dadvi_res = opt["opt_result"].x
-    lrvb_cov = compute_lrvb_covariance_direct_method(
-        dadvi_res, zs, dadvi_funs.kl_est_hvp_fun
-    )
+
+    if lrvb_method == "Direct":
+        lrvb_cov = compute_lrvb_covariance_direct_method(
+            dadvi_res, zs, dadvi_funs.kl_est_hvp_fun
+        )
+    else:
+        lrvb_cov = compute_lrvb_covariance_cg(dadvi_res, zs, dadvi_funs.kl_est_hvp_fun)
+
     finish_time = time.time()
 
     runtime_dadvi = finish_time - start_time
@@ -67,7 +81,7 @@ if __name__ == "__main__":
         keep_untransformed=True,
     )
 
-    target_dir = join(target_dir, "lrvb_results")
+    target_dir = join(target_dir, f"lrvb_results_{lrvb_method}")
 
     makedirs(join(target_dir, "draw_dicts"), exist_ok=True)
     makedirs(join(target_dir, "lrvb_info"), exist_ok=True)
