@@ -102,6 +102,7 @@ if __name__ == "__main__":
                 "opt_sequence": dadvi_opt_sequence,
                 "runtime": runtime_dadvi,
                 "lrvb_cov": lrvb_cov,
+                "newton_step_norm": opt["newton_step_norm"],
             },
             f,
         )

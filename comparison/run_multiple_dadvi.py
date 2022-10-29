@@ -1,4 +1,6 @@
-from jax.config import config; config.update("jax_enable_x64", True)
+from jax.config import config
+
+config.update("jax_enable_x64", True)
 """
 Run DADVI multiple times to investigate coverage.
 TODO: Consider moving into a separate folder (but then need to make utils available also)
@@ -11,9 +13,8 @@ from dadvi.jax import build_dadvi_funs
 from dadvi.pymc.pymc_to_jax import get_jax_functions_from_pymc
 from dadvi.doubling_dadvi import (
     optimise_dadvi_by_doubling,
-    fit_dadvi_and_estimate_covariances
+    fit_dadvi_and_estimate_covariances,
 )
-from dadvi.core import find_dadvi_optimum
 import numpy as np
 import pandas as pd
 
@@ -23,7 +24,7 @@ model_name = sys.argv[1]
 min_m_power = int(sys.argv[2])
 m = load_model_by_name(model_name)
 
-base_target_dir = f'/media/martin/External Drive/projects/lrvb_paper/coverage_redone/M_{2**min_m_power}'
+base_target_dir = f"/media/martin/External Drive/projects/lrvb_paper/coverage_redone/M_{2**min_m_power}"
 target_dir = os.path.join(base_target_dir, model_name)
 os.makedirs(target_dir, exist_ok=True)
 
@@ -51,7 +52,12 @@ freq_sds = opt_result["dadvi_result"]["frequentist_mean_sds"]
 means = np.split(dadvi_res, 2)[0]
 m_picked = zs.shape[0]
 
-reference_results = {"means": means, "freq_sds": freq_sds, "m_picked": m_picked}
+reference_results = {
+    "means": means,
+    "freq_sds": freq_sds,
+    "m_picked": m_picked,
+    "newton_step_norm": opt["newton_step_norm"],
+}
 
 rerun_results = list()
 
@@ -61,15 +67,26 @@ for cur_run in range(n_reruns):
     np.random.seed(cur_seed)
     cur_z = np.random.randn(m_picked, means.shape[0])
 
-    result = fit_dadvi_and_estimate_covariances(init_var_params, cur_z, dadvi_funs=dadvi_funs)
+    result = fit_dadvi_and_estimate_covariances(
+        init_var_params, cur_z, dadvi_funs=dadvi_funs
+    )
 
-    freq_sds_rerun = result['frequentist_mean_sds']
+    freq_sds_rerun = result["frequentist_mean_sds"]
 
-    opt = result['optimisation_result']
+    opt = result["optimisation_result"]
 
     rerun_means = np.split(opt["opt_result"].x, 2)[0]
 
-    rerun_results.append({"means": rerun_means, "seed": cur_seed, 'freq_sds': freq_sds_rerun})
+    newton_step_norm = opt["newton_step_norm"]
+
+    rerun_results.append(
+        {
+            "means": rerun_means,
+            "seed": cur_seed,
+            "freq_sds": freq_sds_rerun,
+            "newton_step_norm": newton_step_norm,
+        }
+    )
 
 rerun_df = pd.DataFrame(rerun_results)
 
@@ -85,5 +102,6 @@ rerun_df["reference_means"] = rerun_df["reference_means"].apply(np.array)
 rerun_df["reference_freq_sds"] = rerun_df["reference_freq_sds"].apply(np.array)
 
 rerun_df["M"] = reference_results["m_picked"]
+rerun_df["reference_newton_step_norm"] = reference_results["newton_step_norm"]
 
 rerun_df.to_pickle(os.path.join(target_dir, "coverage_results.pkl"))

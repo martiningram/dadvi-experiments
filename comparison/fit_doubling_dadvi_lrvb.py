@@ -1,4 +1,6 @@
-from jax.config import config; config.update("jax_enable_x64", True)
+from jax.config import config
+
+config.update("jax_enable_x64", True)
 # Fit using DADVI. This is the verbose version; we'll want a higher-level API down the road.
 # It's not hard to write one, but hopefully this makes sense to you.
 import sys
@@ -43,7 +45,7 @@ if __name__ == "__main__":
     zs = opt_result["zs"]
     lrvb_cov = opt_result["dadvi_result"]["lrvb_covariance"]
 
-    print(opt_result['M'], opt_result['ratio'])
+    print(opt_result["M"], opt_result["ratio"])
 
     finish_time = time.time()
 
@@ -83,6 +85,7 @@ if __name__ == "__main__":
                 "opt_sequence": dadvi_opt_sequence,
                 "runtime": runtime_dadvi,
                 "lrvb_cov": lrvb_cov,
+                "newton_step_norm": opt["newton_step_norm"],
             },
             f,
         )
