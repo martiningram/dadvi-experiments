@@ -21,6 +21,7 @@ from argparse import ArgumentParser
 
 parser = ArgumentParser()
 parser.add_argument("--model-name", required=True)
+parser.add_argument("--target-dir", required=True, type=str)
 parser.add_argument("--min-m-power", required=False, type=int, default=6)
 parser.add_argument("--n-reruns", required=False, type=int, default=100)
 parser.add_argument("--warm-start", required=False, action="store_true")
@@ -32,7 +33,7 @@ n_reruns = args.n_reruns
 
 m = load_model_by_name(model_name)
 
-base_target_dir = f"/media/martin/External Drive/projects/lrvb_paper/coverage_redone_newton/M_{2**min_m_power}"
+base_target_dir = os.path.join(args.target_dir, f"M_{2**min_m_power}")
 target_dir = os.path.join(base_target_dir, model_name)
 os.makedirs(target_dir, exist_ok=True)
 
