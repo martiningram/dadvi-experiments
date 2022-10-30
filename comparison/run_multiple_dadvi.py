@@ -17,11 +17,19 @@ from dadvi.doubling_dadvi import (
 )
 import numpy as np
 import pandas as pd
+from argparse import ArgumentParser
 
-n_reruns = 100
+parser = ArgumentParser()
+parser.add_argument("--model-name", required=True)
+parser.add_argument("--min-m-power", required=False, type=int, default=6)
+parser.add_argument("--n-reruns", required=False, type=int, default=100)
+parser.add_argument("--warm-start", required=False, action="store_true")
+args = parser.parse_args()
 
-model_name = sys.argv[1]
-min_m_power = int(sys.argv[2])
+model_name = args.model_name
+min_m_power = args.min_m_power
+n_reruns = args.n_reruns
+
 m = load_model_by_name(model_name)
 
 base_target_dir = f"/media/martin/External Drive/projects/lrvb_paper/coverage_redone_newton/M_{2**min_m_power}"
@@ -57,6 +65,7 @@ reference_results = {
     "freq_sds": freq_sds,
     "m_picked": m_picked,
     "newton_step_norm": opt["newton_step_norm"],
+    "var_params": dadvi_res,
 }
 
 rerun_results = list()
@@ -67,8 +76,13 @@ for cur_run in range(n_reruns):
     np.random.seed(cur_seed)
     cur_z = np.random.randn(m_picked, means.shape[0])
 
+    if args.warm_start:
+        rerun_var_params = reference_results["var_params"]
+    else:
+        rerun_var_params = init_var_params
+
     result = fit_dadvi_and_estimate_covariances(
-        init_var_params, cur_z, dadvi_funs=dadvi_funs
+        rerun_var_params, cur_z, dadvi_funs=dadvi_funs
     )
 
     freq_sds_rerun = result["frequentist_mean_sds"]
