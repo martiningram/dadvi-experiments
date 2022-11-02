@@ -21,6 +21,7 @@ from argparse import ArgumentParser
 
 parser = ArgumentParser()
 parser.add_argument("--model-name", required=True)
+parser.add_argument("--target-dir", required=True, type=str)
 parser.add_argument("--min-m-power", required=False, type=int, default=6)
 parser.add_argument("--n-reruns", required=False, type=int, default=100)
 parser.add_argument("--warm-start", required=False, action="store_true")
@@ -32,7 +33,7 @@ n_reruns = args.n_reruns
 
 m = load_model_by_name(model_name)
 
-base_target_dir = f"/media/martin/External Drive/projects/lrvb_paper/coverage_redone/M_{2**min_m_power}"
+base_target_dir = os.path.join(args.target_dir, f"M_{2**min_m_power}")
 target_dir = os.path.join(base_target_dir, model_name)
 os.makedirs(target_dir, exist_ok=True)
 
@@ -49,6 +50,7 @@ opt_result = optimise_dadvi_by_doubling(
     seed=2,
     verbose=True,
     start_m_power=min_m_power,
+    max_m_power=min_m_power, # No doubling!
     max_freq_to_posterior_ratio=0.5,
 )
 
@@ -72,6 +74,8 @@ reference_results = {
 rerun_results = list()
 
 for cur_run in range(n_reruns):
+
+    print(f'On {cur_run} of {n_reruns}')
 
     cur_seed = 1000 + cur_run
     np.random.seed(cur_seed)
