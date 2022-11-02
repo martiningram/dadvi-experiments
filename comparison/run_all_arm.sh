@@ -14,12 +14,14 @@ while read MODEL_NAME; do
     # python fit_doubling_dadvi_lrvb.py "$MODEL_NAME" "$TARGET_DIR"
 
     # Run coverage
-    python run_multiple_dadvi.py \
-	--model-name "$MODEL_NAME" \
-	--target-dir "$COVERAGE_TARGET_DIR" \
-	--min-m-power 6 \
-	--n-reruns 100 \
-	--warm-start
+    for min_m_power in 3 4 5 6; do
+	    python run_multiple_dadvi.py \
+		--model-name "$MODEL_NAME" \
+		--target-dir "$COVERAGE_TARGET_DIR" \
+		--min-m-power $min_m_power \
+		--n-reruns 100 \
+		--warm-start
+    done;
 
 done < all_arm_names.txt
 

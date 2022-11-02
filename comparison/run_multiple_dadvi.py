@@ -50,6 +50,7 @@ opt_result = optimise_dadvi_by_doubling(
     seed=2,
     verbose=True,
     start_m_power=min_m_power,
+    max_m_power=min_m_power, # No doubling!
     max_freq_to_posterior_ratio=0.5,
 )
 
@@ -72,6 +73,8 @@ reference_results = {
 rerun_results = list()
 
 for cur_run in range(n_reruns):
+
+    print(f'On {cur_run} of {n_reruns}')
 
     cur_seed = 1000 + cur_run
     np.random.seed(cur_seed)
