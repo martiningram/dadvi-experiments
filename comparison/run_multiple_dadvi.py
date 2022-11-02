@@ -66,6 +66,7 @@ reference_results = {
     "m_picked": m_picked,
     "newton_step_norm": opt["newton_step_norm"],
     "var_params": dadvi_res,
+    "scipy_opt_result": opt["opt_result"],
 }
 
 rerun_results = list()
@@ -99,6 +100,7 @@ for cur_run in range(n_reruns):
             "seed": cur_seed,
             "freq_sds": freq_sds_rerun,
             "newton_step_norm": newton_step_norm,
+            "scipy_opt_result": opt["opt_result"],
         }
     )
 
@@ -117,5 +119,6 @@ rerun_df["reference_freq_sds"] = rerun_df["reference_freq_sds"].apply(np.array)
 
 rerun_df["M"] = reference_results["m_picked"]
 rerun_df["reference_newton_step_norm"] = reference_results["newton_step_norm"]
+rerun_df["reference_scipy_opt_result"] = reference_results["scipy_opt_result"]
 
 rerun_df.to_pickle(os.path.join(target_dir, "coverage_results.pkl"))
