@@ -50,7 +50,7 @@ opt_result = optimise_dadvi_by_doubling(
     seed=2,
     verbose=True,
     start_m_power=min_m_power,
-    max_m_power=min_m_power, # No doubling!
+    max_m_power=min_m_power,  # No doubling!
     max_freq_to_posterior_ratio=0.5,
 )
 
@@ -75,7 +75,7 @@ rerun_results = list()
 
 for cur_run in range(n_reruns):
 
-    print(f'On {cur_run} of {n_reruns}')
+    print(f"On {cur_run} of {n_reruns}")
 
     cur_seed = 1000 + cur_run
     np.random.seed(cur_seed)
@@ -123,6 +123,8 @@ rerun_df["reference_freq_sds"] = rerun_df["reference_freq_sds"].apply(np.array)
 
 rerun_df["M"] = reference_results["m_picked"]
 rerun_df["reference_newton_step_norm"] = reference_results["newton_step_norm"]
-rerun_df["reference_scipy_opt_result"] = reference_results["scipy_opt_result"]
+rerun_df["reference_scipy_opt_result"] = [
+    reference_results["scipy_opt_result"]
+] * rerun_df.shape[0]
 
 rerun_df.to_pickle(os.path.join(target_dir, "coverage_results.pkl"))
