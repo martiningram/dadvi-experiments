@@ -1,4 +1,6 @@
-from jax.config import config; config.update("jax_enable_x64", True)
+from jax.config import config
+
+config.update("jax_enable_x64", True)
 """
 Run DADVI multiple times to investigate coverage.
 TODO: Consider moving into a separate folder (but then need to make utils available also)
@@ -11,19 +13,27 @@ from dadvi.jax import build_dadvi_funs
 from dadvi.pymc.pymc_to_jax import get_jax_functions_from_pymc
 from dadvi.doubling_dadvi import (
     optimise_dadvi_by_doubling,
-    fit_dadvi_and_estimate_covariances
+    fit_dadvi_and_estimate_covariances,
 )
-from dadvi.core import find_dadvi_optimum
 import numpy as np
 import pandas as pd
+from argparse import ArgumentParser
 
-n_reruns = 100
+parser = ArgumentParser()
+parser.add_argument("--model-name", required=True)
+parser.add_argument("--target-dir", required=True, type=str)
+parser.add_argument("--min-m-power", required=False, type=int, default=6)
+parser.add_argument("--n-reruns", required=False, type=int, default=100)
+parser.add_argument("--warm-start", required=False, action="store_true")
+args = parser.parse_args()
 
-model_name = sys.argv[1]
-min_m_power = int(sys.argv[2])
+model_name = args.model_name
+min_m_power = args.min_m_power
+n_reruns = args.n_reruns
+
 m = load_model_by_name(model_name)
 
-base_target_dir = f'/media/martin/External Drive/projects/lrvb_paper/coverage_redone/M_{2**min_m_power}'
+base_target_dir = os.path.join(args.target_dir, f"M_{2**min_m_power}")
 target_dir = os.path.join(base_target_dir, model_name)
 os.makedirs(target_dir, exist_ok=True)
 
@@ -40,6 +50,7 @@ opt_result = optimise_dadvi_by_doubling(
     seed=2,
     verbose=True,
     start_m_power=min_m_power,
+    max_m_power=min_m_power,  # No doubling!
     max_freq_to_posterior_ratio=0.5,
 )
 
@@ -51,25 +62,51 @@ freq_sds = opt_result["dadvi_result"]["frequentist_mean_sds"]
 means = np.split(dadvi_res, 2)[0]
 m_picked = zs.shape[0]
 
-reference_results = {"means": means, "freq_sds": freq_sds, "m_picked": m_picked}
+reference_results = {
+    "means": means,
+    "freq_sds": freq_sds,
+    "m_picked": m_picked,
+    "newton_step_norm": opt["newton_step_norm"],
+    "var_params": dadvi_res,
+    "scipy_opt_result": opt["opt_result"],
+}
 
 rerun_results = list()
 
 for cur_run in range(n_reruns):
 
+    print(f"On {cur_run} of {n_reruns}")
+
     cur_seed = 1000 + cur_run
     np.random.seed(cur_seed)
     cur_z = np.random.randn(m_picked, means.shape[0])
 
-    result = fit_dadvi_and_estimate_covariances(init_var_params, cur_z, dadvi_funs=dadvi_funs)
+    if args.warm_start:
+        rerun_var_params = reference_results["var_params"]
+    else:
+        rerun_var_params = init_var_params
 
-    freq_sds_rerun = result['frequentist_mean_sds']
+    result = fit_dadvi_and_estimate_covariances(
+        rerun_var_params, cur_z, dadvi_funs=dadvi_funs
+    )
 
-    opt = result['optimisation_result']
+    freq_sds_rerun = result["frequentist_mean_sds"]
+
+    opt = result["optimisation_result"]
 
     rerun_means = np.split(opt["opt_result"].x, 2)[0]
 
-    rerun_results.append({"means": rerun_means, "seed": cur_seed, 'freq_sds': freq_sds_rerun})
+    newton_step_norm = opt["newton_step_norm"]
+
+    rerun_results.append(
+        {
+            "means": rerun_means,
+            "seed": cur_seed,
+            "freq_sds": freq_sds_rerun,
+            "newton_step_norm": newton_step_norm,
+            "scipy_opt_result": opt["opt_result"],
+        }
+    )
 
 rerun_df = pd.DataFrame(rerun_results)
 
@@ -85,5 +122,9 @@ rerun_df["reference_means"] = rerun_df["reference_means"].apply(np.array)
 rerun_df["reference_freq_sds"] = rerun_df["reference_freq_sds"].apply(np.array)
 
 rerun_df["M"] = reference_results["m_picked"]
+rerun_df["reference_newton_step_norm"] = reference_results["newton_step_norm"]
+rerun_df["reference_scipy_opt_result"] = [
+    reference_results["scipy_opt_result"]
+] * rerun_df.shape[0]
 
 rerun_df.to_pickle(os.path.join(target_dir, "coverage_results.pkl"))

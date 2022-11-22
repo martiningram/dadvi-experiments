@@ -1,4 +1,6 @@
-from jax.config import config; config.update("jax_enable_x64", True)
+from jax.config import config
+
+config.update("jax_enable_x64", True)
 # Fit using DADVI. This is the verbose version; we'll want a higher-level API down the road.
 # It's not hard to write one, but hopefully this makes sense to you.
 import sys
@@ -79,6 +81,7 @@ with open(join(target_dir, "dadvi_info", model_name + ".pkl"), "wb") as f:
             "kl_hist": kl_hist_dadvi,
             "opt_sequence": dadvi_opt_sequence,
             "runtime": runtime_dadvi,
+            "newton_step_norm": opt["newton_step_norm"],
         },
         f,
     )
