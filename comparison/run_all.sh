@@ -1,5 +1,5 @@
 TARGET_DIR='/media/martin/External Drive/projects/lrvb_paper/dadvi_runs_october_2022'
-COVERAGE_TARGET_DIR='/media/martin/External Drive/projects/lrvb_paper/coverage_warm_starts'
+COVERAGE_TARGET_DIR='/media/martin/External Drive/projects/lrvb_paper/coverage_warm_starts_rerun'
 
 for MODEL_NAME in microcredit occ_det tennis potus; do
 
