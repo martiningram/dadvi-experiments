@@ -20,13 +20,14 @@ import pickle
 
 model_name = sys.argv[1]
 target_dir = sys.argv[2]
+seed = int(sys.argv[3])
+M = int(sys.argv[4])
 m = load_model_by_name(model_name)
 
 # This will store the sequence of parameters
 opt_callback_fun.opt_sequence = []
 
 M = 30
-seed = 2
 np.random.seed(seed)
 
 start_time = time.time()
