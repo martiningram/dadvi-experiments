@@ -54,22 +54,32 @@ with open(os.path.join(target_dir, "reference.pkl"), "wb") as f:
 
 rerun_results = list()
 
-for cur_run in range(n_reruns):
+completed_runs = 0
+attempts = 0
 
-    print(f"On {cur_run} of {n_reruns}")
+while completed_runs < n_reruns:
 
-    cur_seed = 1000 + cur_run
+    print(f"On {completed_runs} of {n_reruns}")
+
+    cur_seed = 1000 + attempts
     np.random.seed(cur_seed)
     cur_z = np.random.randn(M, jax_funs["n_params"])
+    attempts += 1
 
     if args.warm_start:
         rerun_var_params = reference_results["opt_result"]["opt_result"].x
     else:
         rerun_var_params = init_var_params
 
-    result = find_dadvi_optimum(rerun_var_params, cur_z, dadvi_funs=dadvi_funs)
+    try:
+        result = find_dadvi_optimum(rerun_var_params, cur_z, dadvi_funs=dadvi_funs)
+    except Exception as e:
+        print(f'Optimisation failed with error: {e}')
+        print(f'Retrying with new seed.')
 
     rerun_results.append({"seed": cur_seed, "opt_result": result})
 
-    with open(os.path.join(target_dir, f"{cur_run}.pkl"), "wb") as f:
+    with open(os.path.join(target_dir, f"{completed_runs}.pkl"), "wb") as f:
         pickle.dump(rerun_results, f)
+
+    completed_runs += 1
