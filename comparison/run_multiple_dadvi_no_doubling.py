@@ -47,12 +47,10 @@ opt_result = find_dadvi_optimum(
 )
 
 # Get the results from our reference run:
-reference_results = {"seed": 2, "opt_result": opt_result}
+reference_results = {"seed": 2, "opt_result": opt_result, 'z': zs}
 
 with open(os.path.join(target_dir, "reference.pkl"), "wb") as f:
     pickle.dump(reference_results, f)
-
-rerun_results = list()
 
 completed_runs = 0
 attempts = 0
@@ -77,7 +75,7 @@ while completed_runs < n_reruns:
         print(f'Optimisation failed with error: {e}')
         print(f'Retrying with new seed.')
 
-    rerun_results.append({"seed": cur_seed, "opt_result": result})
+    rerun_results = {"seed": cur_seed, "opt_result": result, 'z': cur_z}
 
     with open(os.path.join(target_dir, f"{completed_runs}.pkl"), "wb") as f:
         pickle.dump(rerun_results, f)
