@@ -12,8 +12,9 @@ import pickle
 from glob import glob
 from tqdm import tqdm
 import pandas as pd
+import sys
 
-M = 64
+M = int(sys.argv[1])
 base_dir = f'/media/martin/External Drive/projects/lrvb_paper/potus_coverage_warm_starts/100_reruns/M_{M}/'
 
 all_runs = glob(base_dir + '*/*.pkl')
@@ -86,15 +87,17 @@ others_loaded = [pickle.load(open(x, 'rb')) for x in other_runs]
 rerun_results = list()
 
 rerun_results.append({'vote_share': ref_vote_share, 'sd': ref_sd,
-                      'seed': ref_results['seed'], 'is_reference': True})
+                      'seed': ref_results['seed'], 'is_reference': True,
+                      'M': M, 'filename': reference})
 
-for cur_loaded in tqdm(others_loaded[:3]):
+for cur_filename, cur_loaded in tqdm(zip(other_runs, others_loaded)):
     
     other_z = cur_loaded['z']
     new_opt_params = cur_loaded['opt_result']['opt_result'].x
     vote_share, sd = estimate_final_vote_share_and_freq_sd(new_opt_params, dadvi_funs, other_z)
    
     rerun_results.append({'vote_share': vote_share, 'sd': sd,
-                          'seed': cur_loaded['seed'], 'is_reference': False})
+                          'seed': cur_loaded['seed'], 'is_reference': False,
+                          'M': M, 'filename': cur_filename})
 
 pd.DataFrame(rerun_results).to_csv(base_dir + 'rerun_sds.csv')
