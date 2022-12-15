@@ -13,6 +13,7 @@ from glob import glob
 from tqdm import tqdm
 import pandas as pd
 import sys
+from datetime import datetime
 
 M = int(sys.argv[1])
 base_dir = f'/media/martin/External Drive/projects/lrvb_paper/potus_coverage_warm_starts/100_reruns/M_{M}/'
@@ -67,8 +68,11 @@ def estimate_final_vote_share_and_freq_sd(opt_params, dadvi_funs, z):
     
     # TODO Preconditioner
     rel_hvp = lambda x: dadvi_funs.kl_est_hvp_fun(opt_params, z, x)
-    cg_result = cg_using_fun_scipy(rel_hvp, rel_grad, preconditioner=None)
+    cg_result = cg_using_fun_scipy(rel_hvp, rel_grad, preconditioner=None, maxiter=1000)
     h_inv_g = cg_result[0]
+
+    cg_success = cg_result[1]
+    print(cg_success)
         
     score_mat = compute_score_matrix(opt_params, dadvi_funs.kl_est_and_grad_fun, z)
     score_mat_means = score_mat.mean(axis=0, keepdims=True)
@@ -78,9 +82,9 @@ def estimate_final_vote_share_and_freq_sd(opt_params, dadvi_funs, z):
     M = score_mat.shape[0]
     freq_sd = np.sqrt((vec.T @ vec) / (M * (M - 1)))
     
-    return final_share, freq_sd
+    return final_share, freq_sd, cg_success
 
-ref_vote_share, ref_sd = estimate_final_vote_share_and_freq_sd(ref_opt_params, dadvi_funs, ref_z)
+ref_vote_share, ref_sd, cg_success = estimate_final_vote_share_and_freq_sd(ref_opt_params, dadvi_funs, ref_z)
 
 others_loaded = [pickle.load(open(x, 'rb')) for x in other_runs]
 
@@ -88,16 +92,19 @@ rerun_results = list()
 
 rerun_results.append({'vote_share': ref_vote_share, 'sd': ref_sd,
                       'seed': ref_results['seed'], 'is_reference': True,
-                      'M': M, 'filename': reference})
+                      'M': M, 'filename': reference, 'cg_converged_after_1k': cg_success})
 
 for cur_filename, cur_loaded in tqdm(zip(other_runs, others_loaded)):
+
+    print(datetime.now(), cur_filename)
     
     other_z = cur_loaded['z']
     new_opt_params = cur_loaded['opt_result']['opt_result'].x
-    vote_share, sd = estimate_final_vote_share_and_freq_sd(new_opt_params, dadvi_funs, other_z)
+    vote_share, sd, cg_success = estimate_final_vote_share_and_freq_sd(new_opt_params, dadvi_funs, other_z)
    
     rerun_results.append({'vote_share': vote_share, 'sd': sd,
                           'seed': cur_loaded['seed'], 'is_reference': False,
-                          'M': M, 'filename': cur_filename})
+                          'M': M, 'filename': cur_filename,
+                          'cg_converged_after_1k': cg_success})
 
 pd.DataFrame(rerun_results).to_csv(base_dir + 'rerun_sds.csv')
