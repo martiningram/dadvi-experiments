@@ -14,6 +14,7 @@ from tqdm import tqdm
 import pandas as pd
 import sys
 from datetime import datetime
+from scipy.sparse import diags
 
 M = int(sys.argv[1])
 base_dir = f'/media/martin/External Drive/projects/lrvb_paper/potus_coverage_warm_starts/100_reruns/M_{M}/'
@@ -65,10 +66,14 @@ def estimate_final_vote_share_and_freq_sd(opt_params, dadvi_funs, z):
     final_share = compute_final_vote_share(opt_params)
     
     rel_grad = grad(compute_final_vote_share)(opt_params)
+
+    opt_variances = np.exp(np.split(opt_params, 2)[1])**2
+    diag_prec = np.concatenate([opt_variances, np.ones(z.shape[1])])
+    sparse_prec = diags(diag_prec)
     
     # TODO Preconditioner
     rel_hvp = lambda x: dadvi_funs.kl_est_hvp_fun(opt_params, z, x)
-    cg_result = cg_using_fun_scipy(rel_hvp, rel_grad, preconditioner=None, maxiter=1000)
+    cg_result = cg_using_fun_scipy(rel_hvp, rel_grad, preconditioner=sparse_prec, maxiter=1000)
     h_inv_g = cg_result[0]
 
     cg_success = cg_result[1]
