@@ -61,19 +61,21 @@ def compute_final_vote_share(full_var_params):
     return expit(mean_shares) @ np_data['state_weights']
 
 
-def estimate_final_vote_share_and_freq_sd(opt_params, dadvi_funs, z):
+def estimate_final_vote_share_and_freq_sd(opt_params, dadvi_funs, z, use_preconditioner=False):
     
     final_share = compute_final_vote_share(opt_params)
     
     rel_grad = grad(compute_final_vote_share)(opt_params)
 
-    opt_variances = np.exp(np.split(opt_params, 2)[1])**2
-    diag_prec = np.concatenate([opt_variances, np.ones(z.shape[1])])
-    sparse_prec = diags(diag_prec)
-    
-    # TODO Preconditioner
+    if use_preconditioner:
+        opt_variances = np.exp(np.split(opt_params, 2)[1])**2
+        diag_prec = np.concatenate([opt_variances, np.ones(z.shape[1])])
+        preconditioner = diags(diag_prec)
+    else:
+        preconditioner = None
+        
     rel_hvp = lambda x: dadvi_funs.kl_est_hvp_fun(opt_params, z, x)
-    cg_result = cg_using_fun_scipy(rel_hvp, rel_grad, preconditioner=sparse_prec, maxiter=1000)
+    cg_result = cg_using_fun_scipy(rel_hvp, rel_grad, preconditioner=preconditioner, maxiter=1000)
     h_inv_g = cg_result[0]
 
     cg_success = cg_result[1]
