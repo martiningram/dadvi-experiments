@@ -40,58 +40,7 @@ def flatten_dict(var_dict, names):
 
 
 
-def add_deviation_stats(model_df, reference_df):
-
-    together = model_df.merge(
-        reference_df, on="model_name", suffixes=("_model", "_reference")
-    )
-
-    together["mean_deviations"] = together.apply(
-        lambda x: compute_z_score_mean(
-            x["means_model"], x["means_reference"], x["sds_reference"]
-        ),
-        axis=1,
-    )
-
-    together["sd_deviations"] = together.apply(
-        lambda x: compute_relative_error_sd(x["sds_model"], x["sds_reference"]), axis=1
-    )
-
-    together["var_names"] = together["means_reference"].apply(
-        lambda x: sorted(list(x.keys()))
-    )
-
-
-    # Add these to the model stats
-    cols_to_keep = [
-        "model_name",
-        "mean_deviations",
-        "sd_deviations",
-        "var_names",
-        "means_reference",
-        "sds_reference"
-    ]
-
-    new_stats = together[cols_to_keep]
-
-    return model_df.merge(new_stats, on='model_name', how='left')
-
-
-def add_derived_stats(model_df):
-
-    model_df["mean_deviations_flat"] = model_df.apply(
-        lambda x: flatten_dict(x["mean_deviations"], x["var_names"]), axis=1
-    )
-
-    model_df["sd_deviations_flat"] = model_df.apply(
-        lambda x: flatten_dict(x["sd_deviations"], x["var_names"]), axis=1
-    )
-
-    model_df['mean_rms'] = model_df['mean_deviations_flat'].apply(lambda x: np.sqrt(np.mean(x**2)))
-    model_df['sd_rms'] = model_df['sd_deviations_flat'].apply(lambda x: np.sqrt(np.mean(x**2)))
-
-    return model_df
-
+##########################
 
 def load_moment_df(draw_folder):
 
@@ -122,10 +71,9 @@ def check_convergence_raabbvi(metadata, max_iter=19900):
     return n_steps < max_iter
 
 
-
 def add_metadata(moment_df, method):
 
-    assert method in VALID_METHODS
+    assert method in ['NUTS', 'RAABBVI', 'DADVI', 'LRVB', 'SADVI', 'SADVI_FR', 'LRVB_Doubling']
 
     if method in ['RAABBVI', 'DADVI', 'LRVB', 'SADVI', 'SADVI_FR', 'LRVB_Doubling']:
         subdir_lookup = {
@@ -143,13 +91,8 @@ def add_metadata(moment_df, method):
             .str.replace(".npz", ".pkl", regex=False)
         )
 
-        #missing_value = -1
-        missing_value = float('nan')
         moment_df['metadata'] = moment_df['info_path'].apply(load_pickle_safely)
-        moment_df['runtime'] = moment_df['metadata'].apply(
-            lambda x: x.get('runtime', missing_value))
-        moment_df['steps'] = moment_df['metadata'].apply(
-            lambda x: x.get('steps', missing_value))
+        moment_df['runtime'] = moment_df['metadata'].apply(lambda x: x['runtime'])
 
         if method.startswith('SADVI'):
             moment_df['converged'] = moment_df['metadata'].apply(check_convergence_sadvi)
@@ -171,3 +114,56 @@ def add_metadata(moment_df, method):
         # TODO: get rhat
 
     return moment_df
+
+
+##################
+
+def add_deviation_stats(model_df, reference_df):
+
+    together = model_df.merge(
+        reference_df, on="model_name", suffixes=("_model", "_reference")
+    )
+
+    together["mean_deviations"] = together.apply(
+        lambda x: compute_z_score_mean(
+            x["means_model"], x["means_reference"], x["sds_reference"]
+        ),
+        axis=1,
+    )
+
+    together["sd_deviations"] = together.apply(
+        lambda x: compute_relative_error_sd(x["sds_model"], x["sds_reference"]), axis=1
+    )
+
+    together["var_names"] = together["means_reference"].apply(
+        lambda x: sorted(list(x.keys()))
+    )
+
+
+    # Add these to the model stats
+    cols_to_keep = [
+        "model_name",
+        "mean_deviations",
+        "sd_deviations",
+        "var_names",
+    ]
+
+    new_stats = together[cols_to_keep]
+
+    return model_df.merge(new_stats, on='model_name', how='left')
+
+
+def add_derived_stats(model_df):
+
+    model_df["mean_deviations_flat"] = model_df.apply(
+        lambda x: flatten_dict(x["mean_deviations"], x["var_names"]), axis=1
+    )
+
+    model_df["sd_deviations_flat"] = model_df.apply(
+        lambda x: flatten_dict(x["sd_deviations"], x["var_names"]), axis=1
+    )
+
+    model_df['mean_rms'] = model_df['mean_deviations_flat'].apply(lambda x: np.sqrt(np.mean(x**2)))
+    model_df['sd_rms'] = model_df['sd_deviations_flat'].apply(lambda x: np.sqrt(np.mean(x**2)))
+
+    return model_df

@@ -28,4 +28,9 @@ can have a first look. Let me know if you have any questions :)
 Notes for Martin
 
 - Let's have some kind of version control for results to make sure
-we're looking at the right date.
+we're looking at the right date.  Probably a logfile with the stdout
+and a datetime stamp would be good, assuming that all the models for a
+particular method are run at the same time.
+- Every method should have a 'converged' metadata tag using its own appropriate
+metric.
+-
