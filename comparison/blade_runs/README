@@ -1,0 +1,3 @@
+This file should contain folders of mean and sd estimates
+for each method.  They are read (for example) by the notebook
+comparison/analysis/compare_moment_estimates.ipynb

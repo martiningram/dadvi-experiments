@@ -40,6 +40,89 @@ def flatten_dict(var_dict, names):
 
 
 
+##########################
+
+def load_moment_df(draw_folder):
+
+    model_dicts = glob(join(draw_folder, "draw_dicts", "*.npz"))
+    data = pd.DataFrame({"draw_dict_path": model_dicts})
+
+    data["draws"] = data["draw_dict_path"].apply(lambda x: dict(np.load(x)))
+    data["means"] = data["draws"].apply(compute_means)
+    data["sds"] = data["draws"].apply(compute_sds)
+
+    # No need for the draws any more for now
+    data = data.drop(columns="draws")
+
+    # Fetch model name
+    data['model_name'] = data['draw_dict_path'].apply(lambda x: splitext(split(x)[-1])[0])
+
+    return data
+
+def check_convergence_sadvi(metadata, max_iter=100000):
+
+    return metadata['steps'] < max_iter
+
+
+def check_convergence_raabbvi(metadata, max_iter=19900):
+
+    n_steps = metadata['kl_hist_i'].max()
+
+    return n_steps < max_iter
+
+
+def add_metadata(moment_df, method):
+
+    assert method in ['NUTS', 'RAABBVI', 'DADVI', 'LRVB', 'SADVI', 'SADVI_FR', 'LRVB_Doubling']
+
+    if method in ['RAABBVI', 'DADVI', 'LRVB', 'SADVI', 'SADVI_FR', 'LRVB_Doubling']:
+        subdir_lookup = {
+            'RAABBVI': 'info',
+            'DADVI': 'dadvi_info',
+            'LRVB': 'lrvb_info',
+            'SADVI': 'info',
+            'SADVI_FR': 'info',
+            'LRVB_Doubling': 'lrvb_info'
+        }
+        subdir = subdir_lookup[method]
+        moment_df["info_path"] = (
+            moment_df["draw_dict_path"]
+            .str.replace("draw_dicts", subdir)
+            .str.replace(".npz", ".pkl", regex=False)
+        )
+
+        #missing_value = -1
+        missing_value = float('nan')
+        moment_df['metadata'] = moment_df['info_path'].apply(load_pickle_safely)
+        moment_df['runtime'] = moment_df['metadata'].apply(
+            lambda x: x.get('runtime', missing_value))
+        moment_df['steps'] = moment_df['metadata'].apply(
+            lambda x: x.get('steps', missing_value))
+
+        if method.startswith('SADVI'):
+            moment_df['converged'] = moment_df['metadata'].apply(check_convergence_sadvi)
+        elif method == 'RAABBVI':
+            moment_df['converged'] = moment_df['metadata'].apply(check_convergence_raabbvi)
+
+    else:
+        # It's NUTS; get runtime:
+        moment_df['runtime_path'] = (
+            moment_df['draw_dict_path']
+            .str.replace('draw_dicts', 'runtimes')
+            .str.replace('.npz', '.csv', regex=False)
+        )
+        moment_df['runtime'] = (
+            moment_df['runtime_path']
+            .apply(lambda x: pd.read_csv(x)['0'].iloc[0])
+        )
+
+        # TODO: get rhat
+
+    return moment_df
+
+
+##################
+
 def add_deviation_stats(model_df, reference_df):
 
     together = model_df.merge(
@@ -91,83 +174,3 @@ def add_derived_stats(model_df):
     model_df['sd_rms'] = model_df['sd_deviations_flat'].apply(lambda x: np.sqrt(np.mean(x**2)))
 
     return model_df
-
-
-def load_moment_df(draw_folder):
-
-    model_dicts = glob(join(draw_folder, "draw_dicts", "*.npz"))
-    data = pd.DataFrame({"draw_dict_path": model_dicts})
-
-    data["draws"] = data["draw_dict_path"].apply(lambda x: dict(np.load(x)))
-    data["means"] = data["draws"].apply(compute_means)
-    data["sds"] = data["draws"].apply(compute_sds)
-
-    # No need for the draws any more for now
-    data = data.drop(columns="draws")
-
-    # Fetch model name
-    data['model_name'] = data['draw_dict_path'].apply(lambda x: splitext(split(x)[-1])[0])
-
-    return data
-
-def check_convergence_sadvi(metadata, max_iter=100000):
-
-    return metadata['steps'] < max_iter
-
-
-def check_convergence_raabbvi(metadata, max_iter=19900):
-
-    n_steps = metadata['kl_hist_i'].max()
-
-    return n_steps < max_iter
-
-
-
-def add_metadata(moment_df, method):
-
-    assert method in VALID_METHODS
-
-    if method in ['RAABBVI', 'DADVI', 'LRVB', 'SADVI', 'SADVI_FR', 'LRVB_Doubling']:
-        subdir_lookup = {
-            'RAABBVI': 'info',
-            'DADVI': 'dadvi_info',
-            'LRVB': 'lrvb_info',
-            'SADVI': 'info',
-            'SADVI_FR': 'info',
-            'LRVB_Doubling': 'lrvb_info'
-        }
-        subdir = subdir_lookup[method]
-        moment_df["info_path"] = (
-            moment_df["draw_dict_path"]
-            .str.replace("draw_dicts", subdir)
-            .str.replace(".npz", ".pkl", regex=False)
-        )
-
-        #missing_value = -1
-        missing_value = float('nan')
-        moment_df['metadata'] = moment_df['info_path'].apply(load_pickle_safely)
-        moment_df['runtime'] = moment_df['metadata'].apply(
-            lambda x: x.get('runtime', missing_value))
-        moment_df['steps'] = moment_df['metadata'].apply(
-            lambda x: x.get('steps', missing_value))
-
-        if method.startswith('SADVI'):
-            moment_df['converged'] = moment_df['metadata'].apply(check_convergence_sadvi)
-        elif method == 'RAABBVI':
-            moment_df['converged'] = moment_df['metadata'].apply(check_convergence_raabbvi)
-
-    else:
-        # It's NUTS; get runtime:
-        moment_df['runtime_path'] = (
-            moment_df['draw_dict_path']
-            .str.replace('draw_dicts', 'runtimes')
-            .str.replace('.npz', '.csv', regex=False)
-        )
-        moment_df['runtime'] = (
-            moment_df['runtime_path']
-            .apply(lambda x: pd.read_csv(x)['0'].iloc[0])
-        )
-
-        # TODO: get rhat
-
-    return moment_df
