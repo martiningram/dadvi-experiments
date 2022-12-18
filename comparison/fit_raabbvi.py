@@ -1,3 +1,4 @@
+from jax.config import config; config.update("jax_enable_x64", True)
 import multiprocessing
 
 multiprocessing.set_start_method("fork")
