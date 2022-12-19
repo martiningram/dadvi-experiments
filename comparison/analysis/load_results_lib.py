@@ -18,6 +18,9 @@ def maybe_load_pickle(pickle_file):
     except Exception:
         return None
 
+# For the draws arrays, the first index is the chain and the second is
+# the draw of that chaing, so we want to average over the first two
+# indices when computing posterior moments.
 def compute_means(draw_dict):
     return {x: y.mean(axis=(0, 1)) for x, y in draw_dict.items()}
 
@@ -139,6 +142,8 @@ def add_deviation_stats(model_df, reference_df):
             x["sds_model"], x["sds_reference"]), axis=1
     )
 
+    # Note: the sorting breaks the order relative to the *_deviations.
+    # It doesn't seem to matter for the way this is used, though.
     together["var_names"] = together["means_reference"].apply(
         lambda x: sorted(list(x.keys()))
     )
@@ -156,7 +161,8 @@ def add_deviation_stats(model_df, reference_df):
     return model_df.merge(new_stats, on='model_name', how='left')
 
 
-#
+# Compute some summary stats within a model of average errors relative
+# to a reference model.  This is for the output of add_deviation_stats
 def add_derived_stats(model_df):
     # These first two just flatten the dictionary in each row of a dataframe,
     # the apply is to each row: each row of mean_deviations is a dictionary,
