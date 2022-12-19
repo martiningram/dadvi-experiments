@@ -29,4 +29,5 @@ and a datetime stamp would be good, assuming that all the models for a
 particular method are run at the same time.
 - Every method should have a 'converged' metadata tag using its own appropriate
 metric.  I agree with your inlinen TODO, let's make sure rhat is in there for NUTS
--
+- I see the metadata doesn't really contain evaluation counts for all models,
+and is using runtime now.  Are evaluation counts saved somewhere else?
