@@ -8,7 +8,7 @@ input_folder <- file.path(base_folder, "comparison/blade_runs/")
 raw_posteriors_df <- read.csv(file.path(input_folder, "posteriors_tidy.csv"), as.is=TRUE)
 metadata_df <- read.csv(file.path(input_folder, "metadata_tidy.csv"), as.is=TRUE)
 
-num_methods <- length(unique(posteriors_df$method))
+num_methods <- length(unique(raw_posteriors_df$method))
 
 
 #########################################################
@@ -56,14 +56,6 @@ stopifnot(length(intersect(arm_models, incomplete_models)) == 0)
 
 ########################################
 # Inspect and categorize the parameters
-
-# See how many parameters are in each model
-posteriors_df %>%
-    filter(method == "DADVI") %>%
-    group_by(model, is_arm) %>%
-    summarize(n_pars=n(), .groups="drop") %>%
-    arrange(n_pars) %>%
-    View()
 
 
 # See the parameter dimensions and filter reporting
@@ -144,64 +136,117 @@ filter(results_df, sd_ref < 1e-6) %>%
 ########################################
 # Aggregate and compare results
 
+# Note that we remove zero sd_ref here; we should make sure above that we're not
+# accidentally hiding real mistakes.
 agg_results_df <-
     results_df %>%
     filter(sd_ref > 1e-6) %>%
     group_by(model, method, is_re) %>%
     summarise(mean_z_rmse=sqrt(mean(mean_z_err^2)),
               sd_rel_rmse=sqrt(mean(sd_rel_err^2)),
-              .groups="drop")
+              .groups="drop") %>%
+    mutate(is_arm=IsARM(model))
 
-any(is.na(agg_results_df$mean_z_rmse))
-any(is.na(agg_results_df$sd_rel_rmse))
+stopifnot(!any(c(
+    any(is.na(agg_results_df$mean_z_rmse)),
+    any(is.na(agg_results_df$sd_rel_rmse))
+)))
 
-#method1 <- "LRVB_Doubling"
-method1 <- "LRVB"
-method2 <- "RAABBVI"
-stopifnot(method1 %in% unique(posteriors_df$method))
-stopifnot(method2 %in% unique(posteriors_df$method))
+
+GetMethodComparisonDf <- function(agg_results_df, method1, method2) {
+    stopifnot(method1 %in% unique(agg_results_df$method))
+    stopifnot(method2 %in% unique(agg_results_df$method))
+    comp_df <-
+        inner_join(filter(agg_results_df, method == !!method1),
+                   filter(agg_results_df, method == !!method2),
+                   suffix=c("_1", "_2"),
+                   by=c("model", "is_re")) %>%
+        mutate(is_arm=IsARM(model),
+               re_label=ifelse(is_re, "Random effect", "Fixed effect"))
+    return(comp_df)    
+}
+
+arm_method1 <- "LRVB_Doubling"
+arm_method2 <- "RAABBVI"
+arm_df <-
+    filter(agg_results_df, is_arm) %>%
+    GetMethodComparisonDf(arm_method1, arm_method2)
+
+if (FALSE) {
+    # The ARM graph we want
+    grid.arrange(
+        arm_df %>% 
+            ggplot(aes(x=mean_z_rmse_1, y=mean_z_rmse_2)) +
+            geom_density2d() +
+            geom_point() +
+            geom_abline(aes(slope=1, intercept=0)) +
+            xlab(arm_method1) + ylab(arm_method2) +
+            facet_grid(~ re_label, scales="fixed") +
+            scale_x_log10() + scale_y_log10() +
+            ggtitle("Mean relative error")
+        ,
+        arm_df %>%
+            ggplot(aes(x=sd_rel_rmse_1, y=sd_rel_rmse_2)) +
+            geom_density2d() +
+            geom_point() +
+            geom_abline(aes(slope=1, intercept=0)) +
+            xlab(arm_method1) + ylab(arm_method2) +
+            facet_grid(~ re_label, scales="fixed") +
+            scale_x_log10() + scale_y_log10() +
+            ggtitle("SD relative error")
+        , ncol=2
+    )
+}
+
+
+
+method1 <- "LRVB_Doubling"
+method2 <- "SADVI"
+
+agg_results_df <-
+    results_df %>%
+    filter(sd_ref > 1e-6, !IsARM(model)) %>%
+    group_by(model, method, param, is_re) %>%
+    summarise(mean_z_rmse=sqrt(mean(mean_z_err^2)),
+              sd_rel_rmse=sqrt(mean(sd_rel_err^2)),
+              .groups="drop") %>%
+    mutate(is_arm=IsARM(model))
 
 comp_df <-
     inner_join(filter(agg_results_df, method == !!method1),
                filter(agg_results_df, method == !!method2),
                suffix=c("_1", "_2"),
-               by=c("model", "is_re")) %>%
-    mutate(is_arm=IsARM(model)) 
-any(is.na(comp_df$mean_z_rmse_1))
-any(is.na(comp_df$sd_rel_rmse_1))
-any(is.na(comp_df$mean_z_rmse_2))
-any(is.na(comp_df$sd_rel_rmse_2))
-
-comp_df %>%
-    filter(is_arm) %>%
-    ggplot(aes(x=log10(mean_z_rmse_1), y=log10(mean_z_rmse_2))) +
-    geom_abline(aes(slope=1, intercept=0)) +
-    geom_point() +
-    geom_density2d()
-
-grid.arrange(
-comp_df %>%
-    filter(is_arm) %>%
-    ggplot(aes(x=mean_z_rmse_1, y=mean_z_rmse_2)) +
-    geom_density2d() +
-    geom_point() +
-    geom_abline(aes(slope=1, intercept=0)) +
-    xlab(method1) + ylab(method2) +
-    facet_grid(~ is_re, scales="fixed") +
-    scale_x_log10() + scale_y_log10() +
-    ggtitle("Mean relative error")
-,
-comp_df %>%
-    filter(is_arm) %>%
-    ggplot(aes(x=sd_rel_rmse_1, y=sd_rel_rmse_2)) +
-    geom_density2d() +
-    geom_point() +
-    geom_abline(aes(slope=1, intercept=0)) +
-    xlab(method1) + ylab(method2) +
-    facet_grid(~ is_re, scales="fixed") +
-    scale_x_log10() + scale_y_log10() +
-    ggtitle("SD relative error")
-, ncol=2
-)
+               by=c("model", "param", "is_re")) %>%
+    mutate(is_arm=IsARM(model),
+           re_label=ifelse(is_re, "Random effect", "Fixed effect"))
 
 
+
+
+
+if (FALSE) {
+    grid.arrange(
+        comp_df %>% 
+            ggplot(aes(x=mean_z_rmse_1, y=mean_z_rmse_2)) +
+            geom_density2d() +
+            geom_point(aes(shape=model, color=model), size=4) +
+            scale_shape(solid=TRUE) +
+            geom_abline(aes(slope=1, intercept=0)) +
+            xlab(arm_method1) + ylab(arm_method2) +
+            facet_grid(~ re_label, scales="fixed") +
+            scale_x_log10() + scale_y_log10() +
+            ggtitle("Mean relative error")
+        ,
+        comp_df %>% 
+            ggplot(aes(x=sd_rel_rmse_1, y=sd_rel_rmse_2)) +
+            geom_density2d() +
+            geom_point(aes(shape=model, color=model), size=4) +
+            scale_shape(solid=TRUE) +
+            geom_abline(aes(slope=1, intercept=0)) +
+            xlab(arm_method1) + ylab(arm_method2) +
+            facet_grid(~ re_label, scales="fixed") +
+            scale_x_log10() + scale_y_log10() +
+            ggtitle("SD relative error")
+        , ncol=2
+    )
+}
