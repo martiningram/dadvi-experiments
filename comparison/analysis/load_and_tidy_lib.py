@@ -18,7 +18,10 @@ def RepList(x, n):
 
 
 def GetDrawFilenames(folder):
-    draw_filenames = glob(join(folder, "draw_dicts", "*.npz"))
+    draw_folder = join(folder, 'draw_dicts')
+    draw_filenames = glob(join(draw_folder, "*.npz"))
+    if len(draw_filenames) == 0:
+        raise ValueError(f'No npz files found in {draw_folder}')
     model_names = [ splitext(split(filename)[-1])[0]
                     for filename in draw_filenames ]
     return draw_filenames, model_names
@@ -26,6 +29,7 @@ def GetDrawFilenames(folder):
 
 def GetMethodDataframe(folder, method):
     draw_filenames, model_names = GetDrawFilenames(folder)
+
     draw_dict = {
         model: dict(np.load(filename))
         for filename, model in zip(draw_filenames, model_names) }
