@@ -59,6 +59,10 @@ filter(posteriors_df, method == "NUTS", model=="microcredit", param == "beta_ful
 # NB we might be able to indentify random effects by the vertical bar
 unique(results_df$param)
 
+
+########################################
+# Aggregate and compare results
+
 agg_results_df <-
     group_by(results_df, model, method) %>%
     summarise(mean_z_rmse=sqrt(mean(mean_z_err^2)),

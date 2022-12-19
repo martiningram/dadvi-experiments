@@ -98,7 +98,8 @@ def GetMetdataDataframe(folder, method):
         runtime_filenames = [
             x.replace('draw_dicts', 'runtimes').replace('.npz', '.csv')
             for x in draw_filenames ]
-        raw_metadata = [ { 'runtime': pd.read_csv(x)['0'].iloc[0] } for x in runtime_filenames ]
+        raw_metadata = [ { 'runtime': pd.read_csv(x)['0'].iloc[0] }
+                         for x in runtime_filenames ]
     else:
         subdir = subdir_lookup[method]
         metadata_filenames = [
