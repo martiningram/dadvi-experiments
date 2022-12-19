@@ -1,3 +1,5 @@
+library(gridExtra)
+
 library(tidyverse)
 
 base_folder <- "/home/rgiordan/Documents/git_repos/DADVI/dadvi-experiments"
@@ -143,13 +145,18 @@ filter(results_df, sd_ref < 1e-6) %>%
 # Aggregate and compare results
 
 agg_results_df <-
-    group_by(results_df, model, method, is_re) %>%
+    results_df %>%
+    filter(sd_ref > 1e-6) %>%
+    group_by(model, method, is_re) %>%
     summarise(mean_z_rmse=sqrt(mean(mean_z_err^2)),
               sd_rel_rmse=sqrt(mean(sd_rel_err^2)),
               .groups="drop")
 
+any(is.na(agg_results_df$mean_z_rmse))
+any(is.na(agg_results_df$sd_rel_rmse))
 
-method1 <- "LRVB_Doubling"
+#method1 <- "LRVB_Doubling"
+method1 <- "LRVB"
 method2 <- "RAABBVI"
 stopifnot(method1 %in% unique(posteriors_df$method))
 stopifnot(method2 %in% unique(posteriors_df$method))
@@ -159,15 +166,42 @@ comp_df <-
                filter(agg_results_df, method == !!method2),
                suffix=c("_1", "_2"),
                by=c("model", "is_re")) %>%
-    mutate(is_arm=IsARM(model))
+    mutate(is_arm=IsARM(model)) 
+any(is.na(comp_df$mean_z_rmse_1))
+any(is.na(comp_df$sd_rel_rmse_1))
+any(is.na(comp_df$mean_z_rmse_2))
+any(is.na(comp_df$sd_rel_rmse_2))
 
 comp_df %>%
     filter(is_arm) %>%
+    ggplot(aes(x=log10(mean_z_rmse_1), y=log10(mean_z_rmse_2))) +
+    geom_abline(aes(slope=1, intercept=0)) +
+    geom_point() +
+    geom_density2d()
+
+grid.arrange(
+comp_df %>%
+    filter(is_arm) %>%
     ggplot(aes(x=mean_z_rmse_1, y=mean_z_rmse_2)) +
-        geom_point() +
-        geom_text(aes(label=model), hjust="left", nudge_x=0.01) +
-        geom_abline(aes(slope=1, intercept=0)) +
-        xlab(method1) + ylab(method2) +
-        facet_grid(~ is_re, scales="fixed") +
-        scale_x_log10() + scale_y_log10()
-    
+    geom_density2d() +
+    geom_point() +
+    geom_abline(aes(slope=1, intercept=0)) +
+    xlab(method1) + ylab(method2) +
+    facet_grid(~ is_re, scales="fixed") +
+    scale_x_log10() + scale_y_log10() +
+    ggtitle("Mean relative error")
+,
+comp_df %>%
+    filter(is_arm) %>%
+    ggplot(aes(x=sd_rel_rmse_1, y=sd_rel_rmse_2)) +
+    geom_density2d() +
+    geom_point() +
+    geom_abline(aes(slope=1, intercept=0)) +
+    xlab(method1) + ylab(method2) +
+    facet_grid(~ is_re, scales="fixed") +
+    scale_x_log10() + scale_y_log10() +
+    ggtitle("SD relative error")
+, ncol=2
+)
+
+
