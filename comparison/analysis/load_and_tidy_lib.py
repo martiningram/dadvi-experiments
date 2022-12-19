@@ -83,7 +83,7 @@ def CheckConvergence(method, metadata):
         assert(False)
 
 
-def GetMetdataDataframe(folder, method):
+def GetMetadataDataframe(folder, method, return_raw_metadata=False):
     subdir_lookup = {
         'RAABBVI': 'info',
         'DADVI': 'dadvi_info',
@@ -107,10 +107,14 @@ def GetMetdataDataframe(folder, method):
             for x in draw_filenames ]
         raw_metadata = [ LoadPickleSafely(x) for x in metadata_filenames ]
 
+    if return_raw_metadata:
+        return raw_metadata
+
     metadata_df = pd.DataFrame({
         'method': RepList(method, len(raw_metadata)),
         'model': model_names,
         'runtime': [ m['runtime'] for m in raw_metadata ],
         'converged': [ CheckConvergence(method, m) for m in raw_metadata ]
         } )
+
     return metadata_df
