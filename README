@@ -13,11 +13,7 @@ comparison/analysis/DADVI%20coverage.ipynb and the data is here:
 https://drive.google.com/file/d/1Ey0NEvEGbLowePTwvDjwHxehxLbqh7MB/view?usp=share_link
 
 I can also send (3) through, but I'm still having some convergence issues with
-CG. I thought a preconditioner might help, but it seems to have made things
-worse! Maybe I'm computing it wrongly? Code is here if you'd like to have a
-look, Ryan:
-
-https://github.com/martiningram/dadvi-experiments/blob/add-coverage-reruns-without-cov-computations/comparison/analysis/compute_potus_freq_sds.py#L70 .
+CG.
 
 For (1), I should rerun things and save the final Newton step norm to make sure
 DADVI always converges. But I thought I'd send this through already, so that you
@@ -32,5 +28,5 @@ we're looking at the right date.  Probably a logfile with the stdout
 and a datetime stamp would be good, assuming that all the models for a
 particular method are run at the same time.
 - Every method should have a 'converged' metadata tag using its own appropriate
-metric.
+metric.  I agree with your inlinen TODO, let's make sure rhat is in there for NUTS
 -
