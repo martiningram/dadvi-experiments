@@ -54,9 +54,10 @@ arm_models <-
 stopifnot(length(intersect(arm_models, incomplete_models)) == 0)
 
 
+head(posteriors_df)
+
 ########################################
 # Inspect and categorize the parameters
-
 
 # See the parameter dimensions and filter reporting
 param_df <-

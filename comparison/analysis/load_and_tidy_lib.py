@@ -64,20 +64,25 @@ def GetMethodDataframe(folder, method):
 def GetEvaluationCount(method, metadata):
     missing_value = float('NaN')
     if method == 'NUTS':
-        n_calls = missing_value # Need to save the number of draws in the metadata
+        # Need to save the number of draws in the metadata
+        n_calls = missing_value
     elif method == 'RAABBVI':
         n_calls = metadata['kl_hist_i'].max()
     elif method == 'DADVI':
         evaluation_count = metadata['opt_result']['evaluation_count']
-        n_calls = evaluation_count['n_hvp_calls'] + evaluation_count['n_val_and_grad_calls']
+        n_calls = evaluation_count['n_hvp_calls'] + \
+            evaluation_count['n_val_and_grad_calls']
     elif method == 'LRVB':
-        n_calls = missing_value # Need to save the extra LRVB iterations in the metadata
+        # Need to save the extra LRVB iterations in the metadata
+        n_calls = missing_value
     elif method == 'SADVI':
         n_calls = metadata['steps']
     elif method == 'SADVI_FR':
-        n_calls = metadata['steps'] # This is not apples-to-apples obviously
+        # This is not apples-to-apples obviously
+        n_calls = metadata['steps']
     elif method == 'LRVB_Doubling':
-        n_calls = missing_value # Need to save all the steps in the metadata
+        # Need to save all the steps in the metadata
+        n_calls = missing_value
     else:
         raise ValueError(f'Invalid method {method}\n')
     return n_calls
