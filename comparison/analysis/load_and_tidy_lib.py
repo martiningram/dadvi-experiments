@@ -61,6 +61,28 @@ def GetMethodDataframe(folder, method):
     return method_df
 
 
+def GetEvaluationCount(method, metadata):
+    missing_value = float('NaN')
+    if method == 'NUTS':
+        n_calls = missing_value # Need to save the number of draws in the metadata
+    elif method == 'RAABBVI':
+        n_calls = metadata['kl_hist_i'].max()
+    elif method == 'DADVI':
+        evaluation_count = metadata['opt_result']['evaluation_count']
+        n_calls = evaluation_count['n_hvp_calls'] + evaluation_count['n_val_and_grad_calls']
+    elif method == 'LRVB':
+        n_calls = missing_value # Need to save the extra LRVB iterations in the metadata
+    elif method == 'SADVI':
+        n_calls = metadata['steps']
+    elif method == 'SADVI_FR':
+        n_calls = metadata['steps'] # This is not apples-to-apples obviously
+    elif method == 'LRVB_Doubling':
+        n_calls = missing_value # Need to save all the steps in the metadata
+    else:
+        raise ValueError(f'Invalid method {method}\n')
+    return n_calls
+
+
 def CheckConvergence(method, metadata):
     missing_value = float('NaN')
     if method == 'NUTS':
@@ -114,7 +136,8 @@ def GetMetadataDataframe(folder, method, return_raw_metadata=False):
         'method': RepList(method, len(raw_metadata)),
         'model': model_names,
         'runtime': [ m['runtime'] for m in raw_metadata ],
-        'converged': [ CheckConvergence(method, m) for m in raw_metadata ]
+        'converged': [ CheckConvergence(method, m) for m in raw_metadata ],
+        'op_count': [ GetEvaluationCount(method, m) for m in raw_metadata ]
         } )
 
     return metadata_df
