@@ -6,7 +6,11 @@ base_folder <- "/home/rgiordan/Documents/git_repos/DADVI/dadvi-experiments"
 input_folder <- file.path(base_folder, "comparison/blade_runs/") 
 
 raw_posteriors_df <- read.csv(file.path(input_folder, "posteriors_tidy.csv"), as.is=TRUE)
-metadata_df <- read.csv(file.path(input_folder, "metadata_tidy.csv"), as.is=TRUE)
+raw_metadata_df <- read.csv(file.path(input_folder, "metadata_tidy.csv"), as.is=TRUE)
+raw_trace_df <- read.csv(file.path(input_folder, "trace_tidy.csv"), as.is=TRUE)
+
+# We don't really postprocess the metadata
+metadata_df <- raw_metadata_df
 
 num_methods <- length(unique(raw_posteriors_df$method))
 
@@ -98,7 +102,6 @@ if (FALSE) {
 ########################################
 # Explore a little
 
-
 # Basically SADVI and RAABVI rarely converge?
 posteriors_df %>%
     group_by(method) %>%
@@ -111,6 +114,32 @@ posteriors_df %>%
     select(model, param, ind, mean, sd, method)
 
 
+valid_trace_methods <-
+    raw_trace_df %>%
+    filter(!is.na(n_calls)) %>%
+    pull(method) %>%
+    unique()
+print(valid_trace_methods)
+
+method_1 <- "DADVI"
+method_2 <- "RAABBVI"
+
+head(raw_trace_df)
+
+trace_df <-
+    filter(raw_trace_df, method %in% valid_trace_methods) %>%
+    group_by(model) %>%
+    mutate(n_call_prop = n_calls / max(n_calls),
+           obj_value_prop = obj_value - min(obj_value) + 1) %>%
+    ungroup() %>%
+    mutate(is_arm=IsARM(model))
+
+ggplot(trace_df) +
+    geom_line(aes(x=n_call_prop, y=obj_value_prop, color=method, group=paste0(method, model))) +
+    scale_y_log10() +
+    scale_x_log10() +
+    facet_grid(method ~ is_arm) +
+    geom_hline(aes(yintercept=1))
 
 ########################################
 # Compare to a reference method
