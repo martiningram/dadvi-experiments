@@ -41,30 +41,49 @@ coverage_df <-
     coverage_df %>%
     group_by(param, model, num_draws) %>%
     mutate(mean_all=mean(mean),
-              n_runs=n(),
-              freq_sd_all=sqrt(mean(freq_sd^2) / n_runs),
-              .groups="drop") %>%
+           n_runs=n(),
+           freq_sd_all=sqrt(mean(freq_sd^2) / n_runs),
+           .groups="drop") %>%
     mutate(z_score=(mean - mean_all) / freq_sd,
            p_val=pnorm(z_score))
 
 coverage_df$n_runs %>% unique()
 
-n_bins <- 30
+
+# Bin and look for p-value uniformity
+n_bins <- 100
 p_breaks <- seq(0, 1, 1/n_bins)
 stopifnot(length(p_breaks) == n_bins + 1)
+# Time consuming for some reason
+coverage_df <-
+    coverage_df %>%
+    mutate(p_bucket=cut(p_val, p_breaks))
+
+coverage_df <-
+    coverage_df %>%
+    mutate(group_col=paste(model))
+
 plot_df <-
     coverage_df %>%
-    group_by(model, num_draws) %>%
-    mutate(num_z_vals=n()) %>%
-    mutate(p_bucket=cut(p_val, p_breaks)) %>%
-    group_by(model, num_draws, num_z_vals, p_bucket) %>%
-    summarize(count=n(),
-              p_dens=n_bins * n() / num_z_vals, .groups="drop")
+    group_by(num_draws, group_col, p_bucket) %>%
+    summarize(bucket_n=n(), .groups="drop") %>%
+    inner_join(
+        coverage_df %>%
+            group_by(num_draws, group_col) %>%
+            summarize(group_n=n(), .groups="drop"),
+        by=c("num_draws", "group_col")) %>%
+    mutate(p_dens=bucket_n  / group_n)
 
-plot_df %>% arrange(desc(p_dens))
+# Sanity check.  It seems the use of grouping with multiple n() calls
+# does not work the way I'd expect
+group_by(plot_df) %>%
+    group_by(num_draws, group_col, group_n) %>%
+    summarize(s=sum(p_dens), .groups="drop") %>%
+    pull(s) %>%
+    unique()
 
 ggplot(plot_df) +
-    geom_line(aes(x=p_bucket, y=p_dens, group=model), alpha=0.1) +
+    geom_line(aes(x=p_bucket, y=n_bins * p_dens, group=group_col)) +
     facet_grid(num_draws ~ .) +
     expand_limits(y=0)
 
