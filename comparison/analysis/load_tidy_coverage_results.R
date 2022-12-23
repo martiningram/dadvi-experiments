@@ -59,16 +59,83 @@ coverage_df <-
     coverage_df %>%
     mutate(p_bucket=cut(p_val, p_breaks))
 
-coverage_df <-
-    coverage_df %>%
-    mutate(group_col=paste(model))
+
 
 plot_df <-
     coverage_df %>%
+    mutate(group_col=paste(model)) %>%
+    filter(!is_arm)
+
+GetKSPval <- function(x) {
+    ks.test(x, "punif")$p.value
+}
+
+
+ks_test_arm_df <-
+    coverage_df %>%
+    filter(is_arm) %>%
+    mutate(group_col=paste(model)) %>%
+    group_by(num_draws, group_col) %>%
+    summarize(ks_test=GetKSPval(p_val), .groups="drop") %>%
+    mutate(reject=ks_test < 0.01) %>%
+    arrange(num_draws, ks_test)
+if (FALSE) {
+    View(ks_test_arm_df)
+}
+
+
+# For the non-ARM models, we can't reject any of the individual parameters
+ks_test_nonarm_df <-
+    coverage_df %>%
+    filter(!is_arm) %>%
+    group_by(num_draws, model, param) %>%
+    summarize(ks_test=GetKSPval(p_val), .groups="drop") %>%
+    mutate(reject=ks_test < 0.01) %>%
+    arrange(num_draws, ks_test)
+
+ks_test_nonarm_df %>%
+    group_by(num_draws, model) %>%
+    summarize(num_reject=sum(reject)) 
+
+
+# But some of the models can be rejected
+ks_test_models_df <-
+    coverage_df %>%
+    group_by(num_draws, model, is_arm) %>%
+    summarize(ks_test=GetKSPval(p_val), .groups="drop") %>%
+    mutate(reject=ks_test < 0.01) %>%
+    arrange(num_draws, ks_test)
+
+ks_test_models_df %>%
+    mutate(model_short=ifelse(is_arm, "ARM", model)) %>%
+    group_by(num_draws, model_short) %>%
+    summarize(num_reject=sum(reject)) 
+
+if (FALSE) {
+    View(ks_test_nonarm_df)
+}
+
+
+
+
+ks_test_df <-
+    coverage_df %>%
+    mutate(group_col=paste(model)) %>%
+    group_by(num_draws, group_col) %>%
+    summarize(ks_test=GetKSPval(p_val), .groups="drop") %>%
+    mutate(reject=ks_test < 0.01,
+           is_arm=IsARM(group_col)) %>%
+    arrange(num_draws, ks_test)
+View(ks_test_df %>% filter(is_arm))
+View(ks_test_df %>% filter(!is_arm))
+
+
+plot_df <-
+    plot_df %>%
     group_by(num_draws, group_col, p_bucket) %>%
     summarize(bucket_n=n(), .groups="drop") %>%
     inner_join(
-        coverage_df %>%
+        plot_df %>%
             group_by(num_draws, group_col) %>%
             summarize(group_n=n(), .groups="drop"),
         by=c("num_draws", "group_col")) %>%
@@ -82,8 +149,10 @@ group_by(plot_df) %>%
     pull(s) %>%
     unique()
 
+
 ggplot(plot_df) +
-    geom_line(aes(x=p_bucket, y=n_bins * p_dens, group=group_col)) +
+    geom_line(aes(x=p_bucket, y=n_bins * p_dens, group=group_col, color=group_col)) +
     facet_grid(num_draws ~ .) +
-    expand_limits(y=0)
+    expand_limits(y=0) +
+    theme(axis.text.x=element_blank())
 
