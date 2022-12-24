@@ -28,9 +28,11 @@ if __name__ == "__main__":
         # Running in parallel gets stuck for some models. Fall back to sequential.
         # Microcredit strangely is killed on its third chain, so run only two.
         if model_name == "microcredit":
-            fit_result_nuts = pm.sample(cores=1, chains=2)
+            num_chains = 2
+            fit_result_nuts = pm.sample(cores=1, chains=num_chains)
         else:
-            fit_result_nuts = pm.sample(cores=1, chains=4)
+            num_chains = 4
+            fit_result_nuts = pm.sample(cores=1, chains=num_chains)
         # if model_name in ['potus', 'occ_det']:
         # else:
         #     # Use the defaults
@@ -63,14 +65,18 @@ if __name__ == "__main__":
     # rhat_dict = rhats.to_dict()["data_vars"]
     # ess_dict = ess.to_dict()["data_vars"]
 
+    dims = fit_result_nuts.posterior.dims
+
     metadata = {
         "runtime": runtime,
         "unconstrained_param_names": unconstrained_param_names,
         "ess": ess,
         "rhat": rhats,
+        "n_chains": dims["chain"],
+        "n_draws": dims["draw"],
     }
 
-    target_file = join(target_dir, "nuts_info", "metadata.pkl")
+    target_file = join(target_dir, "nuts_info", f"{model_name}.pkl")
 
     with open(target_file, "wb") as f:
         pickle.dump(metadata, f)
