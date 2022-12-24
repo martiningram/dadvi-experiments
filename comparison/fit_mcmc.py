@@ -5,6 +5,8 @@ import numpy as np
 import time
 import pandas as pd
 from dadvi.pymc.utils import get_unconstrained_variable_names
+import pickle
+import arviz as az
 
 if __name__ == "__main__":
 
@@ -41,7 +43,7 @@ if __name__ == "__main__":
     target_dir = join(target_dir, "nuts_results")
 
     makedirs(join(target_dir, "netcdfs"), exist_ok=True)
-    makedirs(join(target_dir, "runtimes"), exist_ok=True)
+    makedirs(join(target_dir, "nuts_info"), exist_ok=True)
     makedirs(join(target_dir, "draw_dicts"), exist_ok=True)
 
     try:
@@ -56,12 +58,19 @@ if __name__ == "__main__":
 
     unconstrained_param_names = get_unconstrained_variable_names(model)
 
+    rhats = az.rhat(fit_result_nuts)
+    ess = az.ess(fit_result_nuts)
+    # rhat_dict = rhats.to_dict()["data_vars"]
+    # ess_dict = ess.to_dict()["data_vars"]
+
     metadata = {
         "runtime": runtime,
         "unconstrained_param_names": unconstrained_param_names,
+        "ess": ess,
+        "rhat": rhats,
     }
 
-    # TODO: Update the target directory
-    # pd.Series({"runtime": runtime}).to_csv(
-    #     join(target_dir, "runtimes", model_name + ".csv")
-    # )
+    target_file = join(target_dir, "nuts_info", "metadata.pkl")
+
+    with open(target_file, "wb") as f:
+        pickle.dump(metadata, f)
