@@ -4,6 +4,7 @@ from os.path import join
 import numpy as np
 import time
 import pandas as pd
+from dadvi.pymc.utils import get_unconstrained_variable_names
 
 if __name__ == "__main__":
 
@@ -24,7 +25,7 @@ if __name__ == "__main__":
     with model as m:
         # Running in parallel gets stuck for some models. Fall back to sequential.
         # Microcredit strangely is killed on its third chain, so run only two.
-        if model_name == 'microcredit':
+        if model_name == "microcredit":
             fit_result_nuts = pm.sample(cores=1, chains=2)
         else:
             fit_result_nuts = pm.sample(cores=1, chains=4)
@@ -46,13 +47,21 @@ if __name__ == "__main__":
     try:
         fit_result_nuts.to_netcdf(join(target_dir, "netcdfs", model_name + ".netcdf"))
     except RuntimeError as e:
-        print('NetCDF saving failed with error:')
+        print("NetCDF saving failed with error:")
         print(e)
-        print('Continuing.')
+        print("Continuing.")
 
     draw_dict = arviz_to_draw_dict(fit_result_nuts)
     np.savez(join(target_dir, "draw_dicts", model_name + ".npz"), **draw_dict)
 
-    pd.Series({"runtime": runtime}).to_csv(
-        join(target_dir, "runtimes", model_name + ".csv")
-    )
+    unconstrained_param_names = get_unconstrained_variable_names(model)
+
+    metadata = {
+        "runtime": runtime,
+        "unconstrained_param_names": unconstrained_param_names,
+    }
+
+    # TODO: Update the target directory
+    # pd.Series({"runtime": runtime}).to_csv(
+    #     join(target_dir, "runtimes", model_name + ".csv")
+    # )

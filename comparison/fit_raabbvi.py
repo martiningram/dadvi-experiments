@@ -1,4 +1,6 @@
-from jax.config import config; config.update("jax_enable_x64", True)
+from jax.config import config
+
+config.update("jax_enable_x64", True)
 import multiprocessing
 
 multiprocessing.set_start_method("fork")
@@ -14,6 +16,7 @@ from dadvi.pymc.pymc_to_jax import transform_dadvi_draws
 from os import makedirs
 from os.path import join
 import pickle
+from dadvi.pymc.utils import get_unconstrained_variable_names
 
 
 model_name = sys.argv[1]
@@ -59,7 +62,7 @@ kl_hist_viabel = [
     for cur_params in viabel_result["variational_param_history"][::compute_kl_every]
 ]
 
-target_dir = join(target_dir, 'raabbvi_results')
+target_dir = join(target_dir, "raabbvi_results")
 
 makedirs(join(target_dir, "draw_dicts"), exist_ok=True)
 makedirs(join(target_dir, "info"), exist_ok=True)
@@ -73,6 +76,7 @@ with open(join(target_dir, "info", model_name + ".pkl"), "wb") as f:
             "kl_hist": kl_hist_viabel,
             "kl_hist_i": viabel_i,
             "runtime": runtime_viabel,
+            "unconstrained_param_names": get_unconstrained_variable_names(m),
         },
         f,
     )

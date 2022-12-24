@@ -9,12 +9,13 @@ import pandas as pd
 import pickle
 
 from utils import load_model_by_name, arviz_to_draw_dict, fit_pymc_sadvi
+from dadvi.pymc.utils import get_unconstrained_variable_names
 
 if __name__ == "__main__":
 
     model_name = sys.argv[1]
-    method = sys.argv[2]
-    target_dir = sys.argv[3]
+    target_dir = sys.argv[2]
+    method = sys.argv[3]
     model = load_model_by_name(model_name)
 
     print("Fitting")
@@ -44,6 +45,7 @@ if __name__ == "__main__":
             {
                 "steps": fit_result_sadvi["fit_res"].hist.shape[0],
                 "runtime": runtime,
+                "unconstrained_param_names": get_unconstrained_variable_names(model),
             },
             f,
         )

@@ -13,6 +13,7 @@ import time
 from dadvi.utils import opt_callback_fun
 from dadvi.doubling_dadvi import optimise_dadvi_by_doubling
 from dadvi.pymc.pymc_to_jax import transform_dadvi_draws
+from dadvi.pymc.utils import get_unconstrained_variable_names
 from os import makedirs
 from os.path import join
 import pickle
@@ -86,6 +87,8 @@ if __name__ == "__main__":
                 "runtime": runtime_dadvi,
                 "lrvb_cov": lrvb_cov,
                 "newton_step_norm": opt["newton_step_norm"],
+                "newton_step": opt["newton_step"],
+                "unconstrained_param_names": get_unconstrained_variable_names(m),
             },
             f,
         )
