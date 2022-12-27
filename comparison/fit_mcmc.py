@@ -4,6 +4,9 @@ from os.path import join
 import numpy as np
 import time
 import pandas as pd
+from dadvi.pymc.utils import get_unconstrained_variable_names
+import pickle
+import arviz as az
 
 if __name__ == "__main__":
 
@@ -24,10 +27,12 @@ if __name__ == "__main__":
     with model as m:
         # Running in parallel gets stuck for some models. Fall back to sequential.
         # Microcredit strangely is killed on its third chain, so run only two.
-        if model_name == 'microcredit':
-            fit_result_nuts = pm.sample(cores=1, chains=2)
+        if model_name == "microcredit":
+            num_chains = 2
+            fit_result_nuts = pm.sample(cores=1, chains=num_chains)
         else:
-            fit_result_nuts = pm.sample(cores=1, chains=4)
+            num_chains = 4
+            fit_result_nuts = pm.sample(cores=1, chains=num_chains)
         # if model_name in ['potus', 'occ_det']:
         # else:
         #     # Use the defaults
@@ -40,19 +45,38 @@ if __name__ == "__main__":
     target_dir = join(target_dir, "nuts_results")
 
     makedirs(join(target_dir, "netcdfs"), exist_ok=True)
-    makedirs(join(target_dir, "runtimes"), exist_ok=True)
+    makedirs(join(target_dir, "nuts_info"), exist_ok=True)
     makedirs(join(target_dir, "draw_dicts"), exist_ok=True)
 
     try:
         fit_result_nuts.to_netcdf(join(target_dir, "netcdfs", model_name + ".netcdf"))
     except RuntimeError as e:
-        print('NetCDF saving failed with error:')
+        print("NetCDF saving failed with error:")
         print(e)
-        print('Continuing.')
+        print("Continuing.")
 
     draw_dict = arviz_to_draw_dict(fit_result_nuts)
     np.savez(join(target_dir, "draw_dicts", model_name + ".npz"), **draw_dict)
 
-    pd.Series({"runtime": runtime}).to_csv(
-        join(target_dir, "runtimes", model_name + ".csv")
-    )
+    unconstrained_param_names = get_unconstrained_variable_names(model)
+
+    rhats = az.rhat(fit_result_nuts)
+    ess = az.ess(fit_result_nuts)
+    # rhat_dict = rhats.to_dict()["data_vars"]
+    # ess_dict = ess.to_dict()["data_vars"]
+
+    dims = fit_result_nuts.posterior.dims
+
+    metadata = {
+        "runtime": runtime,
+        "unconstrained_param_names": unconstrained_param_names,
+        "ess": ess,
+        "rhat": rhats,
+        "n_chains": dims["chain"],
+        "n_draws": dims["draw"],
+    }
+
+    target_file = join(target_dir, "nuts_info", f"{model_name}.pkl")
+
+    with open(target_file, "wb") as f:
+        pickle.dump(metadata, f)
