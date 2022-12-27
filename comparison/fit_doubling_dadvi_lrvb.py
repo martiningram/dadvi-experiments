@@ -19,6 +19,35 @@ from os.path import join
 import pickle
 
 
+def extract_metadata_dict(opt_result):
+
+    opt = opt_result["dadvi_result"]["optimisation_result"]
+    zs = opt_result["zs"]
+    lrvb_cov = opt_result["dadvi_result"]["lrvb_covariance"]
+    dadvi_opt_sequence = opt_result["opt_sequence"]
+
+    kl_hist_dadvi = [
+        estimate_kl_fresh_draws(dadvi_funs, cur_hist["theta"])
+        for cur_hist in dadvi_opt_sequence
+    ]
+
+    metadata = {
+        "opt_result": opt,
+        "fixed_draws": zs,
+        "M": zs.shape[0],
+        "kl_hist": kl_hist_dadvi,
+        "opt_sequence": dadvi_opt_sequence,
+        "lrvb_cov": lrvb_cov,
+        "newton_step_norm": opt["newton_step_norm"],
+        "newton_step": opt["newton_step"],
+        "unconstrained_param_names": get_unconstrained_variable_names(m),
+        "ratio": opt_result["ratio"],
+        "ratio_is_ok": opt_result["ratio_is_ok"],
+    }
+
+    return metadata
+
+
 if __name__ == "__main__":
     import multiprocessing
 
@@ -37,10 +66,18 @@ if __name__ == "__main__":
     init_means = np.zeros(jax_funs["n_params"])
     init_log_vars = np.zeros(jax_funs["n_params"]) - 3
     init_var_params = np.concatenate([init_means, init_log_vars])
-    opt_result = optimise_dadvi_by_doubling(
-        init_var_params, dadvi_funs, seed=2, verbose=True, start_m_power=3
+    all_opt_results = optimise_dadvi_by_doubling(
+        init_var_params,
+        dadvi_funs,
+        seed=2,
+        verbose=True,
+        start_m=20,
+        max_m=160,
+        max_freq_to_posterior_ratio=0.2,
+        callback_fun=opt_callback_fun,
     )
 
+    opt_result = all_opt_results[max(all_opt_results.keys())]
     opt = opt_result["dadvi_result"]["optimisation_result"]
     dadvi_res = opt["opt_result"].x
     zs = opt_result["zs"]
@@ -76,19 +113,18 @@ if __name__ == "__main__":
         for cur_hist in dadvi_opt_sequence
     ]
 
+    metadata_final = extract_metadata_dict(opt_result)
+    all_metadata = {
+        cur_M: extract_metadata_dict(cur_result)
+        for cur_M, cur_result in all_opt_results.items()
+    }
+
     with open(join(target_dir, "lrvb_info", model_name + ".pkl"), "wb") as f:
         pickle.dump(
             {
-                "opt_result": opt,
-                "fixed_draws": zs,
-                "M": zs.shape[0],
-                "kl_hist": kl_hist_dadvi,
-                "opt_sequence": dadvi_opt_sequence,
-                "runtime": runtime_dadvi,
-                "lrvb_cov": lrvb_cov,
-                "newton_step_norm": opt["newton_step_norm"],
-                "newton_step": opt["newton_step"],
-                "unconstrained_param_names": get_unconstrained_variable_names(m),
+                "last_step_info": metadata_final,
+                "all_doubling_step_info": all_metadata,
+                "runtime": finish_time - start_time,
             },
             f,
         )
