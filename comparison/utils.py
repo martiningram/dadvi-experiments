@@ -14,6 +14,7 @@ from dadvi.pymc.models.occ_det import get_occ_det_model_from_pickle
 from dadvi.pymc.models.potus import get_potus_model
 from dadvi.pymc.models.tennis import fetch_tennis_model
 import pymc as pm
+from copy import deepcopy
 
 
 NON_ARM_MODELS = ["microcredit", "occ_det", "potus", "tennis"]
@@ -61,19 +62,67 @@ def arviz_to_draw_dict(az_trace):
     return {x: y.values for x, y in dict_version.items()}
 
 
+def flat_results_to_dict(flat_data, advi_fit_result):
+    # Turns a flat vector of PyMC ADVI results into a dictionary.
+
+    result = dict()
+    for name, s, shape, dtype in advi_fit_result.ordering.values():
+        # dims = advi_fit_result.model.RV_dims.get(name, None)
+        # if dims is not None:
+        #     coords = {d: np.array(advi_fit_result.model.coords[d]) for d in dims}
+        # else:
+        #     coords = None
+        values = np.array(flat_data[s]).reshape(shape).astype(dtype)
+        result[name] = values
+
+    return result
+
+
+def pymc_advi_history_callback(Approximation, losses, i, record_every=100):
+    # A callback for PyMC3, recording the KL over time, estimated with n_draws.
+    # logp_fn_dict_vmap must evaluate the log posterior, and must be vectorised,
+    # i.e. must be able to take batches of parameters.
+
+    if i == 1:
+        # Initialise to empty list
+        pymc_advi_history_callback.kl_history = list()
+
+    if i % record_every != 1:
+        return
+
+    means = Approximation.mean.eval()
+    sds = Approximation.std.eval()
+
+    mean_dict = flat_results_to_dict(means, Approximation)
+    sd_dict = flat_results_to_dict(sds, Approximation)
+
+    # TODO: Use these results to compute the ELBO
+    pymc_advi_history_callback.kl_history.append(
+        (i, {"means": mean_dict, "sds": sd_dict})
+    )
+
+
 def fit_pymc_sadvi(
-    m, n_draws=1000, n_steps=100000, method="advi", convergence_crit="default"
+    m,
+    n_draws=1000,
+    n_steps=100000,
+    method="advi",
+    convergence_crit="default",
+    extra_callbacks=[],
 ):
 
     assert method in ["advi", "fullrank_advi"]
 
     if convergence_crit is None:
-        extra_args = {}
+        extra_args = {"callbacks": extra_callbacks}
     elif convergence_crit == "default":
-        extra_args = {"callbacks": [pm.callbacks.CheckParametersConvergence()]}
+        extra_args = {
+            "callbacks": [pm.callbacks.CheckParametersConvergence()] + extra_callbacks
+        }
     elif convergence_crit == "absdiff":
         extra_args = {
             "callbacks": [pm.callbacks.CheckParametersConvergence(diff="absolute")]
+            + extra_callbacks
         }
     else:
         assert False, "Unknown convergence criterion."
