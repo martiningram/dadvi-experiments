@@ -23,11 +23,6 @@ IsARM <- function(model) { !(model %in% non_arm_models) }
 REF_SEED <- "reference"
 stopifnot(sum(raw_coverage_df$seed == REF_SEED) > 0)
 
-coverage_df <- 
-    raw_coverage_df %>%
-    filter(!(model %in% bad_models)) %>%
-    mutate(is_arm=IsARM(model)) %>%
-    filter(seed != REF_SEED)
 
 non_arm_models %in% unique(coverage_df$model)
 
@@ -35,19 +30,62 @@ non_arm_models %in% unique(coverage_df$model)
 #########################################
 # Compute a ground truth and p values
 
-head(coverage_df)
 
-coverage_df <-
+
+if (TRUE) {
+    coverage_df <- 
+        raw_coverage_df %>%
+        filter(!(model %in% bad_models)) %>%
+        mutate(is_arm=IsARM(model))
+    
+    coverage_df <-
+        coverage_df %>%
+        group_by(param, model, num_draws) %>%
+        mutate(mean_all=mean(mean),
+               n_runs=n(),
+               freq_sd_all=sqrt(mean(freq_sd^2) / n_runs)) %>%
+        mutate(z_score=(mean - mean_all) / freq_sd,
+               p_val=pnorm(z_score))
+    
     coverage_df %>%
-    group_by(param, model, num_draws) %>%
-    mutate(mean_all=mean(mean),
-           n_runs=n(),
-           freq_sd_all=sqrt(mean(freq_sd^2) / n_runs),
-           .groups="drop") %>%
-    mutate(z_score=(mean - mean_all) / freq_sd,
-           p_val=pnorm(z_score))
+        group_by(ifelse(is_arm, "ARM", model), num_draws) %>%
+        mutate(sd_ratio=freq_sd / freq_sd_all) %>%
+        summarise(min=min(sd_ratio),
+                  q10=quantile(sd_ratio, 0.1),
+                  q50=quantile(sd_ratio, 0.5),
+                  q90=quantile(sd_ratio, 0.9),
+                  max=max(sd_ratio))
 
-coverage_df$n_runs %>% unique()
+} else {
+    # Alternatively use a reference value
+    reference_seed <- REF_SEED
+    tmp_df <-
+        raw_coverage_df %>%
+        filter(!(model %in% bad_models)) %>%
+        select(seed, param, model, num_draws, mean, freq_sd)
+    coverage_df <-
+        inner_join(filter(tmp_df, seed != reference_seed),
+                   filter(tmp_df, seed == reference_seed),
+                   by=c("param", "model", "num_draws"),
+                   suffix=c("", "_ref")) %>%
+        mutate(freq_diff_sd=sqrt(freq_sd^2 + freq_sd_ref^2),
+               z_score=(mean - mean_ref) / freq_diff_sd,
+               p_val=pnorm(z_score),
+               is_arm=IsARM(model))
+    rm(tmp_df)
+}
+
+# TODO: probably you should use the 64-draw runs as reference values for
+# the other ones.  Once we get to 32 everything is okay anyway.
+
+
+stopifnot(nrow(coverage_df) > 0)
+
+
+
+
+#######################################################
+# Check for p-value uniformity in a variety of ways
 
 
 # Bin and look for p-value uniformity
@@ -60,11 +98,6 @@ coverage_df <-
     mutate(p_bucket=cut(p_val, p_breaks))
 
 
-
-plot_df <-
-    coverage_df %>%
-    mutate(group_col=paste(model)) %>%
-    filter(!is_arm)
 
 GetKSPval <- function(x) {
     ks.test(x, "punif")$p.value
@@ -116,8 +149,6 @@ if (FALSE) {
 }
 
 
-
-
 ks_test_df <-
     coverage_df %>%
     mutate(group_col=paste(model)) %>%
@@ -126,8 +157,27 @@ ks_test_df <-
     mutate(reject=ks_test < 0.01,
            is_arm=IsARM(group_col)) %>%
     arrange(num_draws, ks_test)
-View(ks_test_df %>% filter(is_arm))
-View(ks_test_df %>% filter(!is_arm))
+if (FALSE) {
+    View(ks_test_df %>% filter(is_arm))
+    View(ks_test_df %>% filter(!is_arm))
+}
+
+
+
+if (TRUE) {
+    # Plot the non-ARM results
+    plot_df <-
+        coverage_df %>%
+        mutate(group_col=paste(model)) %>%
+        filter(!is_arm)
+    
+} else {
+    # Plot the ARM results
+    plot_df <-
+        coverage_df %>%
+        mutate(group_col=paste("")) %>%
+        filter(is_arm)
+}
 
 
 plot_df <-
@@ -150,9 +200,10 @@ group_by(plot_df) %>%
     unique()
 
 
-ggplot(plot_df) +
-    geom_line(aes(x=p_bucket, y=n_bins * p_dens, group=group_col, color=group_col)) +
-    facet_grid(num_draws ~ .) +
-    expand_limits(y=0) +
-    theme(axis.text.x=element_blank())
-
+if (FALSE) {
+    ggplot(plot_df) +
+        geom_line(aes(x=p_bucket, y=n_bins * p_dens, group=group_col, color=group_col)) +
+        facet_grid(num_draws ~ .) +
+        expand_limits(y=0) +
+        theme(axis.text.x=element_blank())
+}
