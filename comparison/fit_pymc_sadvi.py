@@ -17,6 +17,7 @@ from utils import (
 from dadvi.pymc.utils import get_unconstrained_variable_names
 from dadvi.pymc.pymc_to_jax import get_jax_functions_from_pymc
 from dadvi.jax import build_dadvi_funs
+from utils import get_run_datetime_and_hostname
 
 if __name__ == "__main__":
 
@@ -76,6 +77,7 @@ if __name__ == "__main__":
                 "runtime": runtime,
                 "unconstrained_param_names": get_unconstrained_variable_names(model),
                 "kl_history": kl_estimates,
+                **get_run_datetime_and_hostname(),
             },
             f,
         )
