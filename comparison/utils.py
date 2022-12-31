@@ -14,7 +14,6 @@ from dadvi.pymc.models.occ_det import get_occ_det_model_from_pickle
 from dadvi.pymc.models.potus import get_potus_model
 from dadvi.pymc.models.tennis import fetch_tennis_model
 import pymc as pm
-from copy import deepcopy
 from jax.flatten_util import ravel_pytree
 
 
@@ -68,14 +67,10 @@ def arviz_to_draw_dict(az_trace):
 
 def flat_results_to_dict(flat_data, advi_fit_result):
     # Turns a flat vector of PyMC ADVI results into a dictionary.
+    # Adapted from: https://github.com/pymc-devs/pymc/pull/6387
 
     result = dict()
     for name, s, shape, dtype in advi_fit_result.ordering.values():
-        # dims = advi_fit_result.model.RV_dims.get(name, None)
-        # if dims is not None:
-        #     coords = {d: np.array(advi_fit_result.model.coords[d]) for d in dims}
-        # else:
-        #     coords = None
         values = np.array(flat_data[s]).reshape(shape).astype(dtype)
         result[name] = values
 
