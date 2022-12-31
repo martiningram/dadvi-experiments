@@ -17,6 +17,7 @@ from dadvi.pymc.pymc_to_jax import transform_dadvi_draws
 from os import makedirs
 from os.path import join
 import pickle
+from utils import get_run_datetime_and_hostname
 
 
 model_name = sys.argv[1]
@@ -85,6 +86,7 @@ with open(join(target_dir, "dadvi_info", model_name + ".pkl"), "wb") as f:
             "newton_step_norm": opt["newton_step_norm"],
             "newton_step": opt["newton_step"],
             "unconstrained_param_names": get_unconstrained_variable_names(m),
+            **get_run_datetime_and_hostname(),
         },
         f,
     )

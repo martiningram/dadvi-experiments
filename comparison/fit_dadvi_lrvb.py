@@ -21,6 +21,7 @@ from os import makedirs
 from os.path import join
 import pickle
 from dadvi.pymc.utils import get_unconstrained_variable_names
+from utils import get_run_datetime_and_hostname
 
 
 if __name__ == "__main__":
@@ -106,6 +107,7 @@ if __name__ == "__main__":
                 "newton_step_norm": opt["newton_step_norm"],
                 "newton_step": opt["newton_step"],
                 "unconstrained_param_names": get_unconstrained_variable_names(m),
+                **get_run_datetime_and_hostname(),
             },
             f,
         )

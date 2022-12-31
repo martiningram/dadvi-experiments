@@ -15,6 +15,8 @@ from dadvi.pymc.models.potus import get_potus_model
 from dadvi.pymc.models.tennis import fetch_tennis_model
 import pymc as pm
 from jax.flatten_util import ravel_pytree
+from datetime import datetime
+import socket
 
 
 NON_ARM_MODELS = ["microcredit", "occ_det", "potus", "tennis"]
@@ -168,3 +170,11 @@ def fit_pymc_sadvi(
         draws = fit_res.sample(n_draws)
 
     return {"draw_dict": arviz_to_draw_dict(draws), "fit_res": fit_res}
+
+
+def get_run_datetime_and_hostname():
+
+    run_datetime = datetime.now()
+    hostname = socket.gethostname()
+
+    return {"datetime": run_datetime, "hostname": hostname}

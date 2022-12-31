@@ -17,6 +17,7 @@ from dadvi.pymc.utils import get_unconstrained_variable_names
 from os import makedirs
 from os.path import join
 import pickle
+from utils import get_run_datetime_and_hostname
 
 
 def extract_metadata_dict(opt_result):
@@ -125,6 +126,7 @@ if __name__ == "__main__":
                 "last_step_info": metadata_final,
                 "all_doubling_step_info": all_metadata,
                 "runtime": finish_time - start_time,
+                **get_run_datetime_and_hostname(),
             },
             f,
         )

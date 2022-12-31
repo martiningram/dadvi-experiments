@@ -18,6 +18,7 @@ from dadvi.doubling_dadvi import (
 import numpy as np
 import pandas as pd
 from argparse import ArgumentParser
+from utils import get_run_datetime_and_hostname
 
 parser = ArgumentParser()
 parser.add_argument("--model-name", required=True)
@@ -105,6 +106,7 @@ for cur_run in range(n_reruns):
             "freq_sds": freq_sds_rerun,
             "newton_step_norm": newton_step_norm,
             "scipy_opt_result": opt["opt_result"],
+            **get_run_datetime_and_hostname(),
         }
     )
 

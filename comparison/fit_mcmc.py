@@ -7,6 +7,7 @@ import pandas as pd
 from dadvi.pymc.utils import get_unconstrained_variable_names
 import pickle
 import arviz as az
+from utils import get_run_datetime_and_hostname
 
 if __name__ == "__main__":
 
@@ -74,6 +75,7 @@ if __name__ == "__main__":
         "rhat": rhats,
         "n_chains": dims["chain"],
         "n_draws": dims["draw"],
+        **get_run_datetime_and_hostname(),
     }
 
     target_file = join(target_dir, "nuts_info", f"{model_name}.pkl")
