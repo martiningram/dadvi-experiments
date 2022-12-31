@@ -249,8 +249,7 @@ GetMethodComparisonDf <- function(results_df, method1, method2, group_cols) {
 
     stopifnot(method1 %in% unique(results_df$method))
     stopifnot(method2 %in% unique(results_df$method))
-    stopifnot("group_col" %in% names(results_df))
-    
+
     # Note that we remove zero sd_ref here, but we should not assume
     # that a datapoint is bad just because sd_ref is zero.
     # Rather, we should make sure above that we're not
@@ -276,25 +275,19 @@ GetMethodComparisonDf <- function(results_df, method1, method2, group_cols) {
     return(comp_df)    
 }
 
-results_df %>%
-    mutate(group_col=paste(model, is_re)) %>%
-    filter(is_arm) %>%
-    GetMethodComparisonDf(method1="LRVB_Doubling", method2="SADVI", group_cols=c("model", "is_re")) %>%
-    View()
-
-
+arm_group_cols <- "model"
 arm_df <-
     bind_rows(
         results_df %>%
-            mutate(group_col=paste(model, is_re)) %>%
             filter(is_arm) %>%
-            GetMethodComparisonDf("LRVB_Doubling", "SADVI"),
+            GetMethodComparisonDf("LRVB_Doubling", "SADVI", 
+                                  group_cols=arm_group_cols),
         results_df %>%
-            mutate(group_col=paste(model, is_re)) %>%
             filter(is_arm) %>%
-            GetMethodComparisonDf("LRVB_Doubling", "RAABBVI")
-    ) %>%
-    mutate(re_label)
+            GetMethodComparisonDf("LRVB_Doubling", "RAABBVI",
+                                  group_cols=arm_group_cols)
+    ) 
+#%>%    mutate(re_label=ifelse(is_re, "Random effect", "Fixed effect"))
 save_list[["arm_df"]] <- arm_df
 
 if (FALSE) {
@@ -302,21 +295,21 @@ if (FALSE) {
     grid.arrange(
         arm_df %>% 
             ggplot(aes(x=mean_z_rmse_1, y=mean_z_rmse_2)) +
-            geom_density2d() +
+            #geom_density2d() +
             geom_point() +
             geom_abline(aes(slope=1, intercept=0)) +
             xlab("DADVI") + ylab("Stochastic VI") +
-            facet_grid(comparison ~ re_label, scales="fixed") +
+            facet_grid(comparison ~ ., scales="fixed") +
             scale_x_log10() + scale_y_log10() +
             ggtitle("Mean relative error")
         ,
         arm_df %>%
             ggplot(aes(x=sd_rel_rmse_1, y=sd_rel_rmse_2)) +
-            geom_density2d() +
+            #geom_density2d() +
             geom_point() +
             geom_abline(aes(slope=1, intercept=0)) +
             xlab("DADVI") + ylab("Stochastic VI") +
-            facet_grid(comparison ~ re_label, scales="fixed") +
+            facet_grid(comparison ~ ., scales="fixed") +
             scale_x_log10() + scale_y_log10() +
             ggtitle("SD relative error")
         , ncol=2
@@ -324,49 +317,41 @@ if (FALSE) {
 }
 
 
-
-nonarm_agg_results_df <-
-    results_df %>%
-    filter(sd_ref > 1e-6, !IsARM(model)) %>%
-    group_by(model, method, param, is_re) %>%
-    summarise(mean_z_rmse=sqrt(mean(mean_z_err^2)),
-              sd_rel_rmse=sqrt(mean(sd_rel_err^2)),
-              .groups="drop") %>%
-    mutate(is_arm=IsARM(model))
-
-
 nonarm_df <-
     bind_rows(
-        nonarm_agg_results_df %>%
-            GetMethodComparisonDf("LRVB_Doubling", "SADVI"),
-        nonarm_agg_results_df %>%
-            GetMethodComparisonDf("LRVB_Doubling", "RAABBVI")
+        results_df %>%
+            filter(!is_arm) %>%
+            GetMethodComparisonDf("LRVB_Doubling", "SADVI", 
+                                  group_cols=c("model", "param")),
+        results_df %>%
+            filter(!is_arm) %>%
+            GetMethodComparisonDf("LRVB_Doubling", "RAABBVI",
+                                  group_cols=c("model", "param"))
     )
 save_list[["nonarm_df"]] <- nonarm_df
-
 
 
 if (FALSE) {
     grid.arrange(
         nonarm_df %>% 
             ggplot(aes(x=mean_z_rmse_1, y=mean_z_rmse_2)) +
-            geom_density2d() +
+            #geom_density2d() +
             geom_point(aes(shape=model, color=model), size=4) +
             scale_shape(solid=TRUE) +
             geom_abline(aes(slope=1, intercept=0)) +
             xlab("DADVI") + ylab("Stochastic VI") +
-            facet_grid(comparison ~ re_label, scales="fixed") +
+            facet_grid(comparison ~ ., scales="fixed") +
             scale_x_log10() + scale_y_log10() +
             ggtitle("Mean relative error")
         ,
         nonarm_df %>% 
             ggplot(aes(x=sd_rel_rmse_1, y=sd_rel_rmse_2)) +
-            geom_density2d() +
+            #geom_density2d() +
             geom_point(aes(shape=model, color=model), size=4) +
             scale_shape(solid=TRUE) +
             geom_abline(aes(slope=1, intercept=0)) +
             xlab("DADVI") + ylab("Stochastic VI") +
-            facet_grid(comparison ~ re_label, scales="fixed") +
+            facet_grid(comparison ~ ., scales="fixed") +
             scale_x_log10() + scale_y_log10() +
             ggtitle("SD relative error")
         , ncol=2
