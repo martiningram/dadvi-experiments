@@ -15,6 +15,7 @@ from dadvi.pymc.models.potus import get_potus_model
 from dadvi.pymc.models.tennis import fetch_tennis_model
 import pymc as pm
 from copy import deepcopy
+from jax.flatten_util import ravel_pytree
 
 
 NON_ARM_MODELS = ["microcredit", "occ_det", "potus", "tennis"]
@@ -46,9 +47,12 @@ def load_model_by_name(model_name):
     return model
 
 
-def estimate_kl_fresh_draws(dadvi_funs, var_params, n_draws=1000):
+def estimate_kl_fresh_draws(dadvi_funs, var_params, n_draws=1000, seed=None):
 
     n_params = len(var_params) // 2
+
+    if seed is not None:
+        np.random.seed(seed)
 
     cur_z = np.random.randn(n_draws, n_params)
     return dadvi_funs.kl_est_and_grad_fun(var_params, cur_z)[0]
@@ -97,9 +101,45 @@ def pymc_advi_history_callback(Approximation, losses, i, record_every=100):
     sd_dict = flat_results_to_dict(sds, Approximation)
 
     # TODO: Use these results to compute the ELBO
+    # Slight problem is that I need to make sure the ordering agrees.
     pymc_advi_history_callback.kl_history.append(
         (i, {"means": mean_dict, "sds": sd_dict})
     )
+
+
+def flatten_and_check_consistent(param_dict, jax_funs):
+    """
+    Flattens the dictionary and checks that the flattening can be undone properly by
+    the "unflatten_fun" in the jax_funs dictionary.
+    """
+
+    flat_vec, fun = ravel_pytree(param_dict)
+
+    v1 = jax_funs["unflatten_fun"](flat_vec)
+    v2 = fun(flat_vec)
+
+    check = np.all([(v1[x] == v2[x]).all() for x in v1])
+
+    assert check
+
+    return flat_vec
+
+
+def estimate_kl_pymc_advi(
+    mean_dict, sd_dict, dadvi_funs, jax_funs, seed=None, n_draws=1000
+):
+    """
+    Estimates the ELBO for a PyMC ADVI set of means and standard deviations.
+    """
+
+    flat_means = flatten_and_check_consistent(mean_dict, jax_funs)
+    flat_sds = flatten_and_check_consistent(sd_dict, jax_funs)
+
+    var_params = np.concatenate([flat_means, np.log(flat_sds)])
+
+    kl = estimate_kl_fresh_draws(dadvi_funs, var_params, seed=seed, n_draws=n_draws)
+
+    return kl
 
 
 def fit_pymc_sadvi(
