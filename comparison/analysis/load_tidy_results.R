@@ -80,6 +80,20 @@ head(posteriors_df)
 
 
 ########################################
+# Look at the number of draws
+
+metadata_df %>%
+    filter(method %in% c("DADVI", "LRVB", "LRVB_Doubling")) %>%
+    group_by(method, num_draws) %>%
+    summarize(n=n())
+
+# metadata_df %>%
+#     filter(method %in% c("DADVI", "LRVB", "LRVB_Doubling")) %>%
+#     arrange(model, method, num_draws) %>%
+#     select(model, method, num_draws)
+
+
+########################################
 # Inspect and categorize the parameters
 
 # See the parameter dimensions and filter reporting
@@ -171,8 +185,8 @@ if (FALSE) {
 }
 
 if (FALSE) {
-    ggplot(final_trace_comb_df) +
-        final_trace_comp_df(aes(x=n_calls_vs_dadvi, y=obj_value_vs_dadvi, color=method)) +
+    ggplot(final_trace_comp_df) +
+        geom_point(aes(x=n_calls_vs_dadvi, y=obj_value_vs_dadvi, color=method)) +
         facet_grid(~ method) +
         scale_x_log10()
 }
@@ -181,8 +195,10 @@ save_list[["trace_df"]] <- trace_df
 
 
 runtime_comp_df <-
-    inner_join(filter(metadata_df, method != "DADVI") %>% select(method, model, runtime, converged),
-               filter(metadata_df, method == "DADVI") %>% select(method, model, runtime, converged),
+    inner_join(filter(metadata_df, method != "DADVI") %>% 
+                   select(method, model, runtime, converged),
+               filter(metadata_df, method == "DADVI") %>% 
+                   select(method, model, runtime, converged),
                by=c("model"), suffix=c("", "_dadvi")) %>%
     mutate(runtime_vs_dadvi=runtime / runtime_dadvi,
            is_arm=IsARM(model))
@@ -235,6 +251,7 @@ results_df <-
     mutate(is_arm=IsARM(model)) %>%
     inner_join(param_df, by=c("model", "param", "is_arm")) %>%
     filter(report_param)
+save_list[["results_df"]] <- results_df
 
 # Sanity check for bad reference values
 filter(results_df, sd_ref < 1e-6) %>% 
@@ -275,87 +292,137 @@ GetMethodComparisonDf <- function(results_df, method1, method2, group_cols) {
     return(comp_df)    
 }
 
-arm_group_cols <- "model"
+arm_group_cols <- c("model", "param")
 arm_df <-
     bind_rows(
         results_df %>%
             filter(is_arm) %>%
-            GetMethodComparisonDf("LRVB_Doubling", "SADVI", 
+            GetMethodComparisonDf("LRVB", "SADVI", 
                                   group_cols=arm_group_cols),
         results_df %>%
             filter(is_arm) %>%
-            GetMethodComparisonDf("LRVB_Doubling", "RAABBVI",
+            GetMethodComparisonDf("LRVB", "RAABBVI",
+                                  group_cols=arm_group_cols),
+        results_df %>%
+            filter(is_arm) %>%
+            GetMethodComparisonDf("LRVB", "SADVI_FR",
                                   group_cols=arm_group_cols)
     ) 
 #%>%    mutate(re_label=ifelse(is_re, "Random effect", "Fixed effect"))
 save_list[["arm_df"]] <- arm_df
 
-if (FALSE) {
-    # The ARM graph we want
-    grid.arrange(
-        arm_df %>% 
-            ggplot(aes(x=mean_z_rmse_1, y=mean_z_rmse_2)) +
-            #geom_density2d() +
-            geom_point() +
-            geom_abline(aes(slope=1, intercept=0)) +
-            xlab("DADVI") + ylab("Stochastic VI") +
-            facet_grid(comparison ~ ., scales="fixed") +
-            scale_x_log10() + scale_y_log10() +
-            ggtitle("Mean relative error")
-        ,
-        arm_df %>%
-            ggplot(aes(x=sd_rel_rmse_1, y=sd_rel_rmse_2)) +
-            #geom_density2d() +
-            geom_point() +
-            geom_abline(aes(slope=1, intercept=0)) +
-            xlab("DADVI") + ylab("Stochastic VI") +
-            facet_grid(comparison ~ ., scales="fixed") +
-            scale_x_log10() + scale_y_log10() +
-            ggtitle("SD relative error")
-        , ncol=2
-    )
-}
-
-
+nonarm_group_cols <- c("model", "param")
 nonarm_df <-
     bind_rows(
         results_df %>%
             filter(!is_arm) %>%
-            GetMethodComparisonDf("LRVB_Doubling", "SADVI", 
-                                  group_cols=c("model", "param")),
+            GetMethodComparisonDf("LRVB", "SADVI", 
+                                  group_cols=nonarm_group_cols),
         results_df %>%
             filter(!is_arm) %>%
-            GetMethodComparisonDf("LRVB_Doubling", "RAABBVI",
-                                  group_cols=c("model", "param"))
+            GetMethodComparisonDf("LRVB", "RAABBVI",
+                                  group_cols=nonarm_group_cols)
     )
 save_list[["nonarm_df"]] <- nonarm_df
 
+if (FALSE) {
+    # What models does DADVI do badly on?
+    threshold <- 0.4
+    dadvi_bad_models <-
+        # filter(arm_df, mean_z_rmse_1 > threshold & 
+        #                mean_z_rmse_2 < threshold) %>%
+        filter(arm_df, mean_z_rmse_1 > threshold) %>%
+        pull(model) %>%
+        unique()
+    
+    print(dadvi_bad_models)
+
+    filter(results_df, model %in% dadvi_bad_models) %>% 
+        select(model, param, ind, method, mean, mean_ref, mean_z_err) %>%
+        arrange(model, param, ind, method) %>%
+        View()
+
+    metadata_df %>% 
+        filter(model %in% dadvi_bad_models) %>% 
+        arrange(model, method) %>% View()
+}
+
 
 if (FALSE) {
+    # Confirm that the SD relative errors cluster at 1 because
+    # MFVB tends to under-estimate variances
+    ggplot(results_df) +
+        geom_point(aes(x=sd_ref, y=sd)) +
+        geom_abline(aes(slope=1, intercept=0)) +
+        scale_x_log10() + scale_y_log10() +
+        facet_grid(~ method)
+}
+
+
+if (FALSE) {
+    # The ARM graph we want
+    arm_mean_plot <-
+        arm_df %>% 
+        ggplot(aes(x=mean_z_rmse_1, y=mean_z_rmse_2)) +
+        geom_density2d(size=1.5) +
+        geom_point() +
+        geom_abline(aes(slope=1, intercept=0)) +
+        xlab("DADVI") + ylab("Stochastic VI") +
+        facet_grid(comparison ~ ., scales="fixed") +
+        scale_x_log10() + scale_y_log10() +
+        ggtitle("Mean relative error (ARM)")
+
+    arm_sd_plot <-
+        arm_df %>%
+        ggplot(aes(x=sd_rel_rmse_1, y=sd_rel_rmse_2)) +
+        geom_density2d(size=1.5) +
+        geom_point() +
+        geom_abline(aes(slope=1, intercept=0)) +
+        xlab("DADVI") + ylab("Stochastic VI") +
+        facet_grid(comparison ~ ., scales="fixed") +
+        scale_x_log10() + scale_y_log10() +
+        ggtitle("SD relative error (ARM)")
+    
     grid.arrange(
-        nonarm_df %>% 
-            ggplot(aes(x=mean_z_rmse_1, y=mean_z_rmse_2)) +
-            #geom_density2d() +
-            geom_point(aes(shape=model, color=model), size=4) +
-            scale_shape(solid=TRUE) +
-            geom_abline(aes(slope=1, intercept=0)) +
-            xlab("DADVI") + ylab("Stochastic VI") +
-            facet_grid(comparison ~ ., scales="fixed") +
-            scale_x_log10() + scale_y_log10() +
-            ggtitle("Mean relative error")
-        ,
-        nonarm_df %>% 
-            ggplot(aes(x=sd_rel_rmse_1, y=sd_rel_rmse_2)) +
-            #geom_density2d() +
-            geom_point(aes(shape=model, color=model), size=4) +
-            scale_shape(solid=TRUE) +
-            geom_abline(aes(slope=1, intercept=0)) +
-            xlab("DADVI") + ylab("Stochastic VI") +
-            facet_grid(comparison ~ ., scales="fixed") +
-            scale_x_log10() + scale_y_log10() +
-            ggtitle("SD relative error")
-        , ncol=2
+        arm_mean_plot, arm_sd_plot,
+        ncol=2
     )
+    
+    nonarm_mean_plot <-
+        nonarm_df %>% 
+        ggplot(aes(x=mean_z_rmse_1, y=mean_z_rmse_2)) +
+        #geom_density2d() +
+        geom_point(aes(shape=model, color=model), size=4) +
+        scale_shape(solid=TRUE) +
+        geom_abline(aes(slope=1, intercept=0)) +
+        xlab("DADVI") + ylab("Stochastic VI") +
+        facet_grid(comparison ~ ., scales="fixed") +
+        scale_x_log10() + scale_y_log10() +
+        ggtitle("Mean relative error (non-ARM)")
+    
+    nonarm_sd_plot <-
+        nonarm_df %>% 
+        ggplot(aes(x=sd_rel_rmse_1, y=sd_rel_rmse_2)) +
+        #geom_density2d() +
+        geom_point(aes(shape=model, color=model), size=4) +
+        scale_shape(solid=TRUE) +
+        geom_abline(aes(slope=1, intercept=0)) +
+        xlab("DADVI") + ylab("Stochastic VI") +
+        facet_grid(comparison ~ ., scales="fixed") +
+        scale_x_log10() + scale_y_log10() +
+        ggtitle("SD relative error (non-ARM)")
+
+    grid.arrange(
+        nonarm_mean_plot, nonarm_sd_plot,
+        ncol=2
+    )
+
+    # Too busy
+    # grid.arrange(
+    #     arm_mean_plot, arm_sd_plot,
+    #     nonarm_mean_plot, nonarm_sd_plot,
+    #     ncol=2
+    # )
 }
 
 

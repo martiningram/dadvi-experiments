@@ -110,6 +110,19 @@ def CheckConvergence(method, metadata):
         assert(False)
 
 
+def GetNumDraws(method, metadata):
+    missing_value = float('NaN')
+    if method in ['DADVI', 'LRVB']:
+        num_draws = metadata['M']
+    elif method == 'LRVB_Doubling':
+        # Need to save all the steps in the metadata
+        num_draws = metadata['M']
+    else:
+        # The number of draws is not meaningful for other methods
+        num_draws = missing_value
+    return num_draws
+
+
 def GetMetadataDataframe(folder, method, return_raw_metadata=False):
     subdir_lookup = {
         'RAABBVI': 'info',
@@ -142,7 +155,8 @@ def GetMetadataDataframe(folder, method, return_raw_metadata=False):
         'model': model_names,
         'runtime': [ m['runtime'] for m in raw_metadata ],
         'converged': [ CheckConvergence(method, m) for m in raw_metadata ],
-        'op_count': [ GetEvaluationCount(method, m) for m in raw_metadata ]
+        'op_count': [ GetEvaluationCount(method, m) for m in raw_metadata ],
+        'num_draws': [ GetNumDraws(method, m) for m in raw_metadata ]
         } )
 
     return metadata_df
