@@ -143,7 +143,6 @@ def GetMetadataDataframe(folder, method, return_raw_metadata=False):
         'runtime': [ m['runtime'] for m in raw_metadata ],
         'converged': [ CheckConvergence(method, m) for m in raw_metadata ],
         'op_count': [ GetEvaluationCount(method, m) for m in raw_metadata ]
-        'num_draws': [ GetNumDraws(method, m) for m in raw_metadata ],
         } )
 
     return metadata_df

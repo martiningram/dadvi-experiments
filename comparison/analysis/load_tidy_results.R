@@ -28,15 +28,18 @@ num_methods <- length(unique(raw_posteriors_df$method))
 metadata_df <-
     raw_metadata_df %>%
     filter(!(model %in% bad_models)) %>%
-    mutate(is_arm = IsARM(model))
-
+    mutate(is_arm = IsARM(model),
+           time_per_op=runtime / op_count)
 save_list[["metadata_df"]] <- metadata_df
-save_list[["num_arm_models"]] <-
-    filter(metadata_df, is_arm, method == "NUTS") %>%
+
+
+non_arm_models <-
+    metadata_df %>%
+    filter(!is_arm) %>%
     pull(model) %>%
-    unique() %>%
-    length()
-    
+    unique()
+save_list[["non_arm_models"]] <- non_arm_models
+
 
 #########################################################
 # Check for models that didn't run with all methods
@@ -91,6 +94,18 @@ metadata_df %>%
 #     filter(method %in% c("DADVI", "LRVB", "LRVB_Doubling")) %>%
 #     arrange(model, method, num_draws) %>%
 #     select(model, method, num_draws)
+
+
+
+########################################
+# Save parameter dimensions
+
+param_dims <-
+    filter(posteriors_df, method == "DADVI") %>%
+    group_by(model, is_arm) %>%
+    summarize(param_dim=n(), .groups="drop")
+save_list[["param_dims"]] <- param_dims
+
 
 
 ########################################
@@ -151,6 +166,7 @@ trace_df <-
     #        obj_value_prop = obj_value - min(obj_value) + 1) %>%
     # ungroup() %>%
     mutate(is_arm=IsARM(model))
+save_list[["trace_df"]] <- trace_df
 
 
 if (FALSE) {
@@ -178,46 +194,85 @@ final_trace_comp_df <-
                by=c("model", "is_arm"), suffix=c("", "_dadvi")) %>%
     mutate(n_calls_vs_dadvi=n_calls / n_calls_dadvi,
            obj_value_vs_dadvi=obj_value - obj_value_dadvi)
-
-
-if (FALSE) {
-    View(final_trace_comp_df)
-}
+save_list[["final_trace_comp_df"]] <- final_trace_comp_df
 
 if (FALSE) {
+    View(final_trace_comp_df %>% filter(!is_arm))
+
     ggplot(final_trace_comp_df) +
         geom_point(aes(x=n_calls_vs_dadvi, y=obj_value_vs_dadvi, color=method)) +
         facet_grid(~ method) +
         scale_x_log10()
 }
 
-save_list[["trace_df"]] <- trace_df
-
-
+# Compare the timem to termination (if not convergence)
 runtime_comp_df <-
     inner_join(filter(metadata_df, method != "DADVI") %>% 
-                   select(method, model, runtime, converged),
+                   select(method, model, runtime, op_count, time_per_op, converged),
                filter(metadata_df, method == "DADVI") %>% 
-                   select(method, model, runtime, converged),
+                   select(method, model, runtime, op_count, time_per_op, converged),
                by=c("model"), suffix=c("", "_dadvi")) %>%
     mutate(runtime_vs_dadvi=runtime / runtime_dadvi,
+           op_count_vs_dadvi=op_count / op_count_dadvi,
            is_arm=IsARM(model))
 
+if (FALSE) {
+    metadata_df %>%
+        filter(method %in% c("DADVI", "RAABBVI", "SADVI", "SADVI_FR"),
+               is_arm) %>%
+        ggplot() +
+            geom_histogram(aes(x=time_per_op, fill=method)) +
+            facet_grid(method ~ .) +
+            scale_x_log10() +
+            ggtitle("Runtime per model evaluation (ARM only)")
+
+    metadata_df %>%
+        filter(method %in% c("DADVI", "RAABBVI", "SADVI", "SADVI_FR"),
+               !is_arm) %>%
+        select(model, method, time_per_op, runtime, op_count) %>%
+        arrange(model,  method)
+}
+
 head(runtime_comp_df)
+runtime_comp_df$method %>% unique()
 
 if (FALSE) {
-    runtime_comp_df %>%
-        filter(method %in% c("NUTS", "RAABBVI", "SADVI"), is_arm) %>%
-        ggplot() + 
-        geom_histogram(aes(x=runtime_vs_dadvi, fill=method)) +
-        facet_grid(method ~ .) +
-        scale_x_log10() +
-        xlab("Runtime / DADVI runtime") +
-        expand_limits(x=1)
+    comp_methods <- c("NUTS", "RAABBVI", "SADVI", "SADVI_FR")
+    runtime_plot <-
+        runtime_comp_df %>%
+            filter(method %in% comp_methods, is_arm) %>%
+            ggplot() + 
+                geom_histogram(aes(x=runtime_vs_dadvi, fill=method)) +
+                facet_grid(method ~ .) +
+                scale_x_log10() +
+                xlab("Runtime / DADVI runtime") +
+                expand_limits(x=1)
+
+    op_plot <-
+        runtime_comp_df %>%
+            filter(method %in% comp_methods, is_arm) %>%
+            ggplot() + 
+                geom_histogram(aes(x=op_count_vs_dadvi, fill=method)) +
+                facet_grid(method ~ .) +
+                scale_x_log10() +
+                xlab("Model evaluations / DADVI model evluations") +
+                expand_limits(x=1)
+    grid.arrange(runtime_plot, op_plot, ncol=2)
+
+    
+    ggplot(runtime_comp_df %>% filter(is_arm)) +
+        geom_point(aes(x=op_count, y=runtime, color=method)) +
+        scale_x_log10() + scale_y_log10()
 }
 
 runtime_comp_df %>%
-    filter(method %in% c("NUTS", "RAABBVI", "SADVI"), !is_arm)
+    filter(method %in% c("NUTS", "RAABBVI", "SADVI"), !is_arm) %>%
+    select(model, method, runtime, runtime_dadvi, runtime_vs_dadvi) %>%
+    arrange(model, method)
+
+save_list[["runtime_comp_df"]] <- runtime_comp_df
+
+
 
 ########################################
 # Explore a little
@@ -248,7 +303,8 @@ results_df <-
                suffix=c("", "_ref")) %>%
     mutate(mean_z_err=(mean - mean_ref) / sd_ref,
            sd_rel_err=(sd - sd_ref) / sd_ref) %>%
-    mutate(is_arm=IsARM(model)) %>%
+    mutate(is_arm=IsARM(model),
+           param_ind=paste0(param, ind)) %>% # Easier to count distinct parameters  
     inner_join(param_df, by=c("model", "param", "is_arm")) %>%
     filter(report_param)
 save_list[["results_df"]] <- results_df
@@ -417,16 +473,12 @@ if (FALSE) {
         ncol=2
     )
 
-    # Too busy
-    # grid.arrange(
-    #     arm_mean_plot, arm_sd_plot,
-    #     nonarm_mean_plot, nonarm_sd_plot,
-    #     ncol=2
-    # )
 }
 
 
 #############################
 # Save
 
-save(save_list, file=file.path(output_folder, "posterior_summary.Rdata"))
+output_file <- file.path(output_folder, "posterior_summary.Rdata")
+print(output_file)
+save(save_list, file=output_file)
