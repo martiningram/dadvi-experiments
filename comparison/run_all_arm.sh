@@ -5,24 +5,22 @@ while read MODEL_NAME; do
     echo "$MODEL_NAME"
 
     # Run inference
-    # python fit_pymc_sadvi.py "$MODEL_NAME" "$TARGET_DIR" advi
-    # python fit_pymc_sadvi.py "$MODEL_NAME" "$TARGET_DIR" fullrank_advi
-    # python fit_raabbvi.py "$MODEL_NAME" "$TARGET_DIR"
-    # python fit_dadvi.py "$MODEL_NAME" "$TARGET_DIR"
-    # python fit_mcmc.py "$MODEL_NAME" "$TARGET_DIR"
-    # python fit_dadvi_lrvb.py "$MODEL_NAME" "$TARGET_DIR" "$TARGET_DIR" CG
-    # python fit_doubling_dadvi_lrvb.py "$MODEL_NAME" "$TARGET_DIR"
+    python fit_pymc_sadvi.py "$MODEL_NAME" "$TARGET_DIR" advi
+    python fit_pymc_sadvi.py "$MODEL_NAME" "$TARGET_DIR" fullrank_advi
+    python fit_raabbvi.py "$MODEL_NAME" "$TARGET_DIR"
+    python fit_dadvi.py "$MODEL_NAME" "$TARGET_DIR"
+    python fit_mcmc.py "$MODEL_NAME" "$TARGET_DIR"
+    python fit_dadvi_lrvb.py "$MODEL_NAME" "$TARGET_DIR" "$TARGET_DIR" CG
+    python fit_doubling_dadvi_lrvb.py "$MODEL_NAME" "$TARGET_DIR" 0.25
 
     # Run coverage
-    for min_m_power in 3 4 5 6; do
-	    python run_multiple_dadvi.py \
-		--model-name "$MODEL_NAME" \
-		--target-dir "$COVERAGE_TARGET_DIR" \
-		--min-m-power $min_m_power \
-		--n-reruns 100 \
-		--warm-start
-    done;
+    # for min_m_power in 3 4 5 6; do
+    #         python run_multiple_dadvi.py \
+    #     	--model-name "$MODEL_NAME" \
+    #     	--target-dir "$COVERAGE_TARGET_DIR" \
+    #     	--min-m-power $min_m_power \
+    #     	--n-reruns 100 \
+    #     	--warm-start
+    # done;
 
 done < all_arm_names.txt
-
-

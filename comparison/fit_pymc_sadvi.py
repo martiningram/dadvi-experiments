@@ -8,13 +8,22 @@ import numpy as np
 import pandas as pd
 import pickle
 
-from utils import load_model_by_name, arviz_to_draw_dict, fit_pymc_sadvi
+from utils import (
+    load_model_by_name,
+    fit_pymc_sadvi,
+    pymc_advi_history_callback,
+    estimate_kl_pymc_advi,
+)
+from dadvi.pymc.utils import get_unconstrained_variable_names
+from dadvi.pymc.pymc_to_jax import get_jax_functions_from_pymc
+from dadvi.jax import build_dadvi_funs
+from utils import get_run_datetime_and_hostname
 
 if __name__ == "__main__":
 
     model_name = sys.argv[1]
-    method = sys.argv[2]
-    target_dir = sys.argv[3]
+    target_dir = sys.argv[2]
+    method = sys.argv[3]
     model = load_model_by_name(model_name)
 
     print("Fitting")
@@ -22,12 +31,34 @@ if __name__ == "__main__":
 
     with model as m:
         fit_result_sadvi = fit_pymc_sadvi(
-            m, n_draws=1000, n_steps=100000, method=method, convergence_crit="default"
+            m,
+            n_draws=1000,
+            n_steps=100000,
+            method=method,
+            convergence_crit="default",
+            extra_callbacks=[pymc_advi_history_callback],
         )
 
     end_time = time.time()
     runtime = end_time - start_time
     print("Done")
+
+    if method == "advi":
+        kl_hist = pymc_advi_history_callback.kl_history
+        jax_funs = get_jax_functions_from_pymc(model)
+        dadvi_funs = build_dadvi_funs(jax_funs["log_posterior_fun"])
+        kl_estimates = [
+            {
+                "step": i,
+                "kl_estimate": estimate_kl_pymc_advi(
+                    cur_params["means"], cur_params["sds"], dadvi_funs, jax_funs, seed=2
+                ),
+            }
+            for i, cur_params in kl_hist
+        ]
+        kl_estimates = pd.DataFrame(kl_estimates)
+    else:
+        kl_estimates = None
 
     base_dir = join(target_dir, f"s{method}_results")
 
@@ -44,6 +75,9 @@ if __name__ == "__main__":
             {
                 "steps": fit_result_sadvi["fit_res"].hist.shape[0],
                 "runtime": runtime,
+                "unconstrained_param_names": get_unconstrained_variable_names(model),
+                "kl_history": kl_estimates,
+                **get_run_datetime_and_hostname(),
             },
             f,
         )
