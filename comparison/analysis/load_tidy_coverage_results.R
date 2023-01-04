@@ -17,6 +17,12 @@ raw_coverage_df$model %>% unique()
 bad_models <- c("test", "test_rstanarm")
 non_arm_models <- c("potus", "tennis", "microcredit", "occ_det")
 
+# These models are just modified versions of another model.  We should
+# probably sort these out systematically.
+repeated_models <- c(
+    "radon_group_chr", "radon_intercept_chr", "radon_no_pool_chr",
+    "wells_predicted", "mesquite_va")
+
 # This function is more convenient than always grouping and merging on is_arm
 IsARM <- function(model) { !(model %in% non_arm_models) }
 
@@ -24,6 +30,10 @@ REF_SEED <- "reference"
 stopifnot(sum(raw_coverage_df$seed == REF_SEED) > 0)
 
 non_arm_models %in% unique(coverage_df$model)
+
+
+# A list of stuff to be saved for the paper
+save_list <- list()
 
 
 #########################################
@@ -36,6 +46,7 @@ if (TRUE) {
     tmp_df <- 
         raw_coverage_df %>%
         filter(!(model %in% bad_models)) %>%
+        filter(!(model %in% repeated_models)) %>%
         mutate(is_arm=IsARM(model))
 
     truth_df <-     
@@ -48,12 +59,15 @@ if (TRUE) {
                   .groups="drop")
     coverage_df <-
         inner_join(tmp_df,
-                   truth_df %>% select(param, model, mean_all, freq_sd_all, n_runs),
+                   truth_df %>% 
+                       select(param, model, mean_all, freq_sd_all, n_runs),
                    by=c("param", "model")) %>%
         mutate(z_score=(mean - mean_all) / freq_sd,
                p_val=pnorm(z_score),
                sd_ratio=freq_sd / freq_sd_all)
-
+    
+    unique(coverage_df$model) %>% sort()
+    coverage_df$p_val %>% length() / coverage_df$p_val %>% unique() %>% length()
     # Check whether the sampling variability of the average is negligible.
     summary(coverage_df %>% filter(num_draws < max(num_draws)) %>% pull(sd_ratio))
 
@@ -79,10 +93,32 @@ if (TRUE) {
 # TODO: probably you should use the 64-draw runs as reference values for
 # the other ones.  Once we get to 32 everything is okay anyway.
 
+# A single model column that groups the ARM models will be convenient
+coverage_df <-
+    coverage_df %>%
+    mutate(model_grouping=ifelse(is_arm, "ARM", model))
 
 stopifnot(nrow(coverage_df) > 0)
 
 
+
+
+# There were some repeated p-values due to repeated models
+if (FALSE) {
+    repeated_p_vals <-
+        coverage_df$p_val %>%
+        table()
+    repeated_p_vals <- repeated_p_vals[repeated_p_vals > 1]
+    repeated_p_vals <- names(repeated_p_vals) %>% as.numeric()
+    
+    length(repeated_p_vals) / nrow(coverage_df)
+    coverage_df %>%
+        mutate(p_match=p_val - repeated_p_vals[1]) %>%
+        filter(abs(p_match) < 1e-5) %>%
+        arrange(mean)
+    
+    filter(coverage_df, abs(p_val - repeated_p_vals[1]) < 1e-8)
+}
 
 
 #######################################################
@@ -129,7 +165,9 @@ ks_test_nonarm_df <-
 
 ks_test_nonarm_df %>%
     group_by(num_draws, model) %>%
-    summarize(num_reject=sum(reject)) 
+    summarize(num_reject=sum(reject),
+              prop_reject=mean(reject),
+              n=n()) 
 
 
 # But some of the models can be rejected
@@ -145,6 +183,7 @@ ks_test_models_df %>%
     group_by(num_draws, model_short) %>%
     summarize(num_reject=sum(reject)) 
 
+
 if (FALSE) {
     View(ks_test_nonarm_df)
 }
@@ -152,59 +191,54 @@ if (FALSE) {
 
 ks_test_df <-
     coverage_df %>%
-    mutate(group_col=paste(model)) %>%
-    group_by(num_draws, group_col) %>%
+    group_by(num_draws, model_grouping) %>%
     summarize(ks_test=GetKSPval(p_val), .groups="drop") %>%
-    mutate(reject=ks_test < 0.01,
-           is_arm=IsARM(group_col)) %>%
+    mutate(reject=ks_test < 0.01) %>%
     arrange(num_draws, ks_test)
-if (FALSE) {
-    View(ks_test_df %>% filter(is_arm))
-    View(ks_test_df %>% filter(!is_arm))
-}
 
-
-
-if (TRUE) {
-    # Plot the non-ARM results
-    plot_df <-
-        coverage_df %>%
-        mutate(group_col=paste(model)) %>%
-        filter(!is_arm)
+save_list[["ks_test_df"]] <- ks_test_df
     
-} else {
-    # Plot the ARM results
-    plot_df <-
-        coverage_df %>%
-        mutate(group_col=paste("")) %>%
-        filter(is_arm)
-}
 
 
-plot_df <-
-    plot_df %>%
-    group_by(num_draws, group_col, p_bucket) %>%
-    summarize(bucket_n=n(), .groups="drop") %>%
+############################################################
+# Aggregate within a bucket for visualization
+
+bucketed_df <-
     inner_join(
-        plot_df %>%
-            group_by(num_draws, group_col) %>%
+        coverage_df %>%
+            group_by(num_draws, model_grouping, p_bucket) %>%
+            summarize(bucket_n=n(), .groups="drop"),
+        coverage_df %>%
+            group_by(num_draws, model_grouping) %>%
             summarize(group_n=n(), .groups="drop"),
-        by=c("num_draws", "group_col")) %>%
-    mutate(p_dens=bucket_n  / group_n)
+        by=c("num_draws", "model_grouping")) %>%
+    mutate(p_dens=bucket_n / group_n)
+head(bucketed_df)
+save_list[["bucketed_df"]] <- bucketed_df
 
-# Sanity check.  It seems the use of grouping with multiple n() calls
-# does not work the way I'd expect
-group_by(plot_df) %>%
-    group_by(num_draws, group_col, group_n) %>%
+# Sanity check.
+p_dens_total <-
+    group_by(bucketed_df) %>%
+    group_by(num_draws, model_grouping, group_n) %>%
     summarize(s=sum(p_dens), .groups="drop") %>%
     pull(s) %>%
     unique()
-
+stopifnot(p_dens_total == 1)
 
 if (FALSE) {
-    ggplot(plot_df) +
-        geom_line(aes(x=p_bucket, y=n_bins * p_dens, group=group_col, color=group_col)) +
+    ggplot(bucketed_df) +
+        geom_line(aes(x=p_bucket, y=n_bins * p_dens, 
+                      group=model_grouping, color=model_grouping)) +
         facet_grid(num_draws ~ .) +
         expand_limits(y=0) +
         theme(axis.text.x=element_blank())
 }
+
+
+
+#############################
+# Save
+
+output_file <- file.path(output_folder, "coverage_summary.Rdata")
+print(output_file)
+save(save_list, file=output_file)

@@ -5,6 +5,13 @@ library(tidyverse)
 bad_models <- c("test", "test_rstanarm")
 non_arm_models <- c("potus", "tennis", "microcredit", "occ_det")
 
+# I think these models are just modified versions of another model.  We should
+# remove them systematically.
+repeated_models <- c(
+    "radon_group_chr", "radon_intercept_chr", "radon_no_pool_chr",
+    "wells_predicted", "mesquite_va")
+
+
 # This function is more convenient than always grouping and merging on is_arm
 IsARM <- function(model) { !(model %in% non_arm_models) }
 
@@ -28,6 +35,7 @@ num_methods <- length(unique(raw_posteriors_df$method))
 metadata_df <-
     raw_metadata_df %>%
     filter(!(model %in% bad_models)) %>%
+    filter(!(model %in% repeated_models)) %>%
     mutate(is_arm = IsARM(model),
            time_per_op=runtime / op_count)
 save_list[["metadata_df"]] <- metadata_df
