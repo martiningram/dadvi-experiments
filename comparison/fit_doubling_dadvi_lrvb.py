@@ -44,6 +44,10 @@ def extract_metadata_dict(opt_result):
         "unconstrained_param_names": get_unconstrained_variable_names(m),
         "ratio": opt_result["ratio"],
         "ratio_is_ok": opt_result["ratio_is_ok"],
+        "lrvb_hvp_count": opt_result["dadvi_result"]["lrvb_hvp_calls"],
+        "lrvb_freq_cov_grad_count": opt_result["dadvi_result"][
+            "lrvb_freq_cov_grad_calls"
+        ],
     }
 
     return metadata
@@ -56,6 +60,7 @@ if __name__ == "__main__":
 
     model_name = sys.argv[1]
     target_dir = sys.argv[2]
+    max_freq_to_post_ratio = float(sys.argv[3])
     m = load_model_by_name(model_name)
 
     # This will store the sequence of parameters
@@ -74,7 +79,7 @@ if __name__ == "__main__":
         verbose=True,
         start_m=20,
         max_m=160,
-        max_freq_to_posterior_ratio=0.2,
+        max_freq_to_posterior_ratio=max_freq_to_post_ratio,
         callback_fun=opt_callback_fun,
     )
 

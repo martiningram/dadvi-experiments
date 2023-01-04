@@ -22,6 +22,7 @@ from os.path import join
 import pickle
 from dadvi.pymc.utils import get_unconstrained_variable_names
 from utils import get_run_datetime_and_hostname
+from dadvi.optimization import count_decorator
 
 
 if __name__ == "__main__":
@@ -59,14 +60,16 @@ if __name__ == "__main__":
     )
     dadvi_res = opt["opt_result"].x
 
+    decorated_hvp = count_decorator(dadvi_funs.kl_est_hvp_fun)
+
     if lrvb_method == "Direct":
-        lrvb_cov = compute_lrvb_covariance_direct_method(
-            dadvi_res, zs, dadvi_funs.kl_est_hvp_fun
-        )
+        lrvb_cov = compute_lrvb_covariance_direct_method(dadvi_res, zs, decorated_hvp)
     else:
-        lrvb_cov = compute_lrvb_covariance_cg(dadvi_res, zs, dadvi_funs.kl_est_hvp_fun)
+        lrvb_cov = compute_lrvb_covariance_cg(dadvi_res, zs, decorated_hvp)
 
     finish_time = time.time()
+
+    lrvb_hvp_calls = decorated_hvp.calls
 
     runtime_dadvi = finish_time - start_time
     dadvi_opt_sequence = opt_callback_fun.opt_sequence
@@ -107,6 +110,7 @@ if __name__ == "__main__":
                 "newton_step_norm": opt["newton_step_norm"],
                 "newton_step": opt["newton_step"],
                 "unconstrained_param_names": get_unconstrained_variable_names(m),
+                "lrvb_hvp_calls": lrvb_hvp_calls,
                 **get_run_datetime_and_hostname(),
             },
             f,
