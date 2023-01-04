@@ -270,6 +270,30 @@ runtime_comp_df %>%
     select(model, method, runtime, runtime_dadvi, runtime_vs_dadvi) %>%
     arrange(model, method)
 
+
+if (FALSE) {
+    ComputationComparisonGraph <- function(comp_df, col) {
+        plt <- ggplot(comp_df) +
+            geom_bar(aes(x=method, group=model, fill=method,
+                         y={{col}}), stat="Identity") +
+            scale_y_log10() +
+            theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+            facet_grid( ~ model)
+        return(plt)
+    }
+    grid.arrange(
+        runtime_comp_df %>%
+            filter(method %in% c("RAABBVI", "SADVI", "SADVI_FR"), !is_arm) %>%
+            ComputationComparisonGraph(runtime_vs_dadvi),
+        runtime_comp_df %>%
+            filter(method %in% c("RAABBVI", "SADVI", "SADVI_FR"), !is_arm) %>%
+            ComputationComparisonGraph(op_count_vs_dadvi),
+        ncol=1
+    )
+}
+
+
+
 save_list[["runtime_comp_df"]] <- runtime_comp_df
 
 

@@ -23,7 +23,6 @@ IsARM <- function(model) { !(model %in% non_arm_models) }
 REF_SEED <- "reference"
 stopifnot(sum(raw_coverage_df$seed == REF_SEED) > 0)
 
-
 non_arm_models %in% unique(coverage_df$model)
 
 
@@ -33,28 +32,30 @@ non_arm_models %in% unique(coverage_df$model)
 
 
 if (TRUE) {
-    coverage_df <- 
+    # Compare the the average within the set of runs
+    tmp_df <- 
         raw_coverage_df %>%
         filter(!(model %in% bad_models)) %>%
         mutate(is_arm=IsARM(model))
-    
-    coverage_df <-
-        coverage_df %>%
+
+    truth_df <-     
+        tmp_df %>%
+        filter(num_draws==max(num_draws)) %>%
         group_by(param, model, num_draws) %>%
-        mutate(mean_all=mean(mean),
-               n_runs=n(),
-               freq_sd_all=sqrt(mean(freq_sd^2) / n_runs)) %>%
+        summarize(mean_all=mean(mean),
+                  n_runs=n(),
+                  freq_sd_all=sqrt(mean(freq_sd^2) / n_runs),
+                  .groups="drop")
+    coverage_df <-
+        inner_join(tmp_df,
+                   truth_df %>% select(param, model, mean_all, freq_sd_all, n_runs),
+                   by=c("param", "model")) %>%
         mutate(z_score=(mean - mean_all) / freq_sd,
-               p_val=pnorm(z_score))
-    
-    coverage_df %>%
-        group_by(ifelse(is_arm, "ARM", model), num_draws) %>%
-        mutate(sd_ratio=freq_sd / freq_sd_all) %>%
-        summarise(min=min(sd_ratio),
-                  q10=quantile(sd_ratio, 0.1),
-                  q50=quantile(sd_ratio, 0.5),
-                  q90=quantile(sd_ratio, 0.9),
-                  max=max(sd_ratio))
+               p_val=pnorm(z_score),
+               sd_ratio=freq_sd / freq_sd_all)
+
+    # Check whether the sampling variability of the average is negligible.
+    summary(coverage_df %>% filter(num_draws < max(num_draws)) %>% pull(sd_ratio))
 
 } else {
     # Alternatively use a reference value
