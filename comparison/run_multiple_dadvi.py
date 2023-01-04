@@ -106,6 +106,8 @@ for cur_run in range(n_reruns):
             "freq_sds": freq_sds_rerun,
             "newton_step_norm": newton_step_norm,
             "scipy_opt_result": opt["opt_result"],
+            "lrvb_hvp_calls": result["lrvb_hvp_calls"],
+            "lrvb_freq_cov_grad_calls": result["lrvb_freq_cov_grad_calls"],
             **get_run_datetime_and_hostname(),
         }
     )
