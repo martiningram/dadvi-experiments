@@ -142,53 +142,21 @@ GetKSPval <- function(x) {
     ks.test(x, "punif")$p.value
 }
 
-
-ks_test_arm_df <-
+ks_test_param_df <-
     coverage_df %>%
-    filter(is_arm) %>%
-    mutate(group_col=paste(model)) %>%
-    group_by(num_draws, group_col) %>%
-    summarize(ks_test=GetKSPval(p_val), .groups="drop") %>%
-    mutate(reject=ks_test < 0.01) %>%
-    arrange(num_draws, ks_test)
-if (FALSE) {
-    View(ks_test_arm_df)
-}
-
-
-# For the non-ARM models, we can't reject any of the individual parameters
-ks_test_nonarm_df <-
-    coverage_df %>%
-    filter(!is_arm) %>%
     group_by(num_draws, model, param) %>%
     summarize(ks_test=GetKSPval(p_val), .groups="drop") %>%
     mutate(reject=ks_test < 0.01) %>%
     arrange(num_draws, ks_test)
 
-ks_test_nonarm_df %>%
-    group_by(num_draws, model) %>%
-    summarize(num_reject=sum(reject),
-              prop_reject=mean(reject),
-              n=n()) 
-
-
-# But some of the models can be rejected
-ks_test_models_df <-
-    coverage_df %>%
-    group_by(num_draws, model, is_arm) %>%
-    summarize(ks_test=GetKSPval(p_val), .groups="drop") %>%
-    mutate(reject=ks_test < 0.01) %>%
-    arrange(num_draws, ks_test)
-
-ks_test_models_df %>%
-    mutate(model_short=ifelse(is_arm, "ARM", model)) %>%
-    group_by(num_draws, model_short) %>%
-    summarize(num_reject=sum(reject)) 
-
 
 if (FALSE) {
-    View(ks_test_nonarm_df)
+    filter(ks_test_param_df, reject) %>%
+        arrange(model, param, num_draws) %>%
+        select(model, param, num_draws, ks_test, reject) %>%
+        View()
 }
+
 
 
 ks_test_df <-
@@ -198,6 +166,7 @@ ks_test_df <-
     mutate(reject=ks_test < 0.01) %>%
     arrange(num_draws, ks_test)
 
+save_list[["ks_test_param_df"]] <- ks_test_param_df
 save_list[["ks_test_df"]] <- ks_test_df
     
 
@@ -237,6 +206,8 @@ if (FALSE) {
 }
 
 
+length(unique(bucketed_df$p_bucket))
+save_list[["bucketed_df"]] <- bucketed_df
 
 #############################
 # Save
