@@ -91,7 +91,9 @@ def estimate_final_vote_share_and_freq_sd(opt_params, dadvi_funs, z, use_precond
     
     return final_share, freq_sd, cg_success
 
-ref_vote_share, ref_sd, cg_success = estimate_final_vote_share_and_freq_sd(ref_opt_params, dadvi_funs, ref_z)
+use_preconditioner = False
+
+ref_vote_share, ref_sd, cg_success = estimate_final_vote_share_and_freq_sd(ref_opt_params, dadvi_funs, ref_z, use_preconditioner=use_preconditioner)
 
 others_loaded = [pickle.load(open(x, 'rb')) for x in other_runs]
 
@@ -114,4 +116,4 @@ for cur_filename, cur_loaded in tqdm(zip(other_runs, others_loaded)):
                           'M': M, 'filename': cur_filename,
                           'cg_converged_after_1k': cg_success})
 
-pd.DataFrame(rerun_results).to_csv(base_dir + 'rerun_sds.csv')
+pd.DataFrame(rerun_results).to_csv(base_dir + f'rerun_sds_precondition_{use_preconditioner}.csv')
