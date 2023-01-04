@@ -1,9 +1,11 @@
 library(gridExtra)
-
 library(tidyverse)
 
 base_folder <- "/home/rgiordan/Documents/git_repos/DADVI/dadvi-experiments"
+paper_base_folder <- "/home/rgiordan/Documents/git_repos/DADVI/fd-advi-paper"
+
 input_folder <- file.path(base_folder, "comparison/analysis/coverage_warm_starts_rerun/") 
+output_folder <- file.path(paper_base_folder, "experiments_data") 
 
 
 raw_coverage_df <- read.csv(file.path(input_folder, "coverage_tidy.csv"), as.is=TRUE)
