@@ -206,7 +206,6 @@ if (FALSE) {
 }
 
 
-length(unique(bucketed_df$p_bucket))
 save_list[["bucketed_df"]] <- bucketed_df
 
 #############################
