@@ -70,8 +70,12 @@ def GetEvaluationCount(method, metadata):
         n_calls = metadata['kl_hist_i'].max()
     elif method == 'DADVI':
         evaluation_count = metadata['opt_result']['evaluation_count']
-        n_calls = evaluation_count['n_hvp_calls'] + \
-            evaluation_count['n_val_and_grad_calls']
+        M = GetNumDraws(method, metadata)
+        # Martin: each gradient call in DADVI actually parallelises across
+        # M draws. The factor of 2 for the hvp is there because it requires
+        # two jacobian-vector products.
+        n_calls = 2 * M * evaluation_count['n_hvp_calls'] + \
+                  M * evaluation_count['n_val_and_grad_calls']
     elif method == 'LRVB':
         # Need to save the extra LRVB iterations in the metadata
         n_calls = missing_value
