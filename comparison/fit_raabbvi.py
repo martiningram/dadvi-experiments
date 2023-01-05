@@ -59,7 +59,7 @@ viabel_i = np.arange(viabel_result["variational_param_history"].shape[0])[
     ::compute_kl_every
 ]
 kl_hist_viabel = [
-    estimate_kl_fresh_draws(dadvi_funs, cur_params)
+    estimate_kl_fresh_draws(dadvi_funs, cur_params, seed=2)
     for cur_params in viabel_result["variational_param_history"][::compute_kl_every]
 ]
 
