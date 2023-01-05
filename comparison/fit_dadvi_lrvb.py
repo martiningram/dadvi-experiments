@@ -93,7 +93,7 @@ if __name__ == "__main__":
     np.savez(join(target_dir, "draw_dicts", model_name + ".npz"), **dadvi_dict)
 
     kl_hist_dadvi = [
-        estimate_kl_fresh_draws(dadvi_funs, cur_hist["theta"])
+        estimate_kl_fresh_draws(dadvi_funs, cur_hist["theta"], seed=2)
         for cur_hist in dadvi_opt_sequence
     ]
 
