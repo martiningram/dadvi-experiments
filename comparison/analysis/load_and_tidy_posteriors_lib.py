@@ -5,7 +5,7 @@ import numpy as np
 import pickle
 
 VALID_METHODS = \
-    ['NUTS', 'RAABBVI', 'DADVI', 'LRVB', 'SADVI', 'SADVI_FR', 'LRVB_Doubling']
+    ['NUTS', 'RAABBVI', 'DADVI', 'SADVI', 'SADVI_FR', 'LRVB_Doubling']
 
 
 def LoadPickleSafely(pickle_file):
@@ -61,17 +61,20 @@ def GetMethodDataframe(folder, method):
     return method_df
 
 
+# Metadata
+
 def GetEvaluationCount(method, metadata):
     missing_value = float('NaN')
     if method == 'NUTS':
-        # Need to save the number of draws in the metadata
-        n_calls = missing_value
+        # This is not apples-to-apples obviously, and there may have been
+        # calls in the MH step or warmup that are not accounted for.
+        n_calls = metadata['n_draws'] * metadata['n_chains']
     elif method == 'RAABBVI':
         n_calls = metadata['kl_hist_i'].max()
     elif method == 'DADVI':
         evaluation_count = metadata['opt_result']['evaluation_count']
         M = GetNumDraws(method, metadata)
-        # Martin: each gradient call in DADVI actually parallelises across
+        # Martin says: each gradient call in DADVI actually parallelises across
         # M draws. The factor of 2 for the hvp is there because it requires
         # two jacobian-vector products.
         n_calls = 2 * M * evaluation_count['n_hvp_calls'] + \
@@ -92,15 +95,28 @@ def GetEvaluationCount(method, metadata):
     return n_calls
 
 
+# Probably there is a better way to do this.
+def GetXarrayDatasetScalar(metadata, field):
+    vals_list = []
+    for varname in metadata[field].data_vars:
+        vals = metadata[field][varname].values.flatten()
+        vals_list.append(vals)
+    return np.hstack(vals_list)
+
+
 def CheckConvergence(method, metadata):
     missing_value = float('NaN')
     if method == 'NUTS':
-        return missing_value
+        min_ess = np.min(GetXarrayDatasetScalar(metadata, field='ess'))
+        rhat_diff = np.max(np.abs(
+            GetXarrayDatasetScalar(metadata, field='rhat') - 1))
+        return (min_ess > 500) and (rhat_diff < 0.2)
     elif method == 'RAABBVI':
         n_steps = metadata['kl_hist_i'].max()
         return n_steps < 19900
     elif method == 'DADVI':
-        return missing_value
+        # This is not nuanced but we seem to pass
+        return metadata['newton_step_norm'] < 1e-4
     elif method == 'LRVB':
         return missing_value
     elif method == 'SADVI':
@@ -132,24 +148,18 @@ def GetMetadataDataframe(folder, method, return_raw_metadata=False):
         'RAABBVI': 'info',
         'DADVI': 'dadvi_info',
         'LRVB': 'lrvb_info',
+        'NUTS': 'nuts_info',
         'SADVI': 'info',
         'SADVI_FR': 'info',
         'LRVB_Doubling': 'lrvb_info' }
 
     draw_filenames, model_names = GetDrawFilenames(folder)
 
-    if method == 'NUTS':
-        runtime_filenames = [
-            x.replace('draw_dicts', 'runtimes').replace('.npz', '.csv')
-            for x in draw_filenames ]
-        raw_metadata = [ { 'runtime': pd.read_csv(x)['0'].iloc[0] }
-                         for x in runtime_filenames ]
-    else:
-        subdir = subdir_lookup[method]
-        metadata_filenames = [
-            x.replace('draw_dicts', subdir).replace('.npz', '.pkl')
-            for x in draw_filenames ]
-        raw_metadata = [ LoadPickleSafely(x) for x in metadata_filenames ]
+    subdir = subdir_lookup[method]
+    metadata_filenames = [
+        x.replace('draw_dicts', subdir).replace('.npz', '.pkl')
+        for x in draw_filenames ]
+    raw_metadata = [ LoadPickleSafely(x) for x in metadata_filenames ]
 
     if return_raw_metadata:
         return raw_metadata
@@ -164,6 +174,9 @@ def GetMetadataDataframe(folder, method, return_raw_metadata=False):
         } )
 
     return metadata_df
+
+
+# Optimization traces
 
 
 def GetObjectiveTraces(method, metadata):
@@ -190,14 +203,14 @@ def GetObjectiveTraces(method, metadata):
         step_hist = missing_value
     elif method == 'SADVI':
         # TODO: Save KL traces for SADVI
-        obj_hist = missing_value
-        step_hist = missing_value
+        obj_hist = metadata['kl_history']['kl_estimate'].to_numpy()
+        step_hist = metadata['kl_history']['step'].to_numpy()
     elif method == 'SADVI_FR':
-        # TODO: Save KL traces for SADVI
+        # This is still missing, but it's not comparable anyway
         obj_hist = missing_value
         step_hist = missing_value
     elif method == 'LRVB_Doubling':
-        # TODO: make sure this makese sense
+        # TODO: compile the full results
         obj_hist = missing_value
         step_hist = missing_value
     else:
@@ -234,3 +247,32 @@ def GetTraceDataframe(folder, method):
     trace_df['method'] = method
 
     return trace_df
+
+
+# Save which parameters are unconstrained.  This should be the same
+# for all the ADVI-based models
+
+def GetUnconstraintedParamsDataframe(folder, method):
+    draw_filenames, model_names = GetDrawFilenames(folder)
+    raw_metadata = GetMetadataDataframe(folder, method, return_raw_metadata=True)
+    unconstrained_params = [ m['unconstrained_param_names'] for m in raw_metadata ]
+
+    param_dict = {
+        'model': [],
+        'unconstrained_params': []
+    }
+
+    assert(len(unconstrained_params) == len(model_names))
+    for model_ind in range(len(unconstrained_params)):
+        model = model_names[model_ind]
+        params = unconstrained_params[model_ind]
+        num_rows = len(params)
+        param_dict['model'].append(RepList(model, num_rows))
+        param_dict['unconstrained_params'].append(params)
+
+    param_df = pd.DataFrame()
+    for k,v in param_dict.items():
+        param_df[k] = np.hstack(v)
+    param_df['method'] = method
+
+    return param_df
