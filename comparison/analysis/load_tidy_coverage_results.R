@@ -25,6 +25,10 @@ repeated_models <- c(
     "radon_group_chr", "radon_intercept_chr", "radon_no_pool_chr",
     "wells_predicted", "mesquite_va")
 
+# These models didn't work with NUTS well enough to use here.
+mcmc_bad_models <- c("earnings_latin_square", "earnings_vary_si", "election88_full")
+
+
 # This function is more convenient than always grouping and merging on is_arm
 IsARM <- function(model) { !(model %in% non_arm_models) }
 
@@ -49,6 +53,7 @@ if (TRUE) {
         raw_coverage_df %>%
         filter(!(model %in% bad_models)) %>%
         filter(!(model %in% repeated_models)) %>%
+        filter(!(model %in% mcmc_bad_models)) %>%
         mutate(is_arm=IsARM(model))
 
     truth_df <-     

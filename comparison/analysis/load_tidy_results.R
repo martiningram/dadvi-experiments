@@ -11,6 +11,8 @@ repeated_models <- c(
     "radon_group_chr", "radon_intercept_chr", "radon_no_pool_chr",
     "wells_predicted", "mesquite_va")
 
+# These models didn't work with NUTS well enough to use here.
+mcmc_bad_models <- c("earnings_latin_square", "earnings_vary_si", "election88_full")
 
 # This function is more convenient than always grouping and merging on is_arm
 IsARM <- function(model) { !(model %in% non_arm_models) }
@@ -29,6 +31,8 @@ save_list <- list()
 raw_posteriors_df <- read.csv(file.path(input_folder, "posteriors_tidy.csv"), as.is=TRUE)
 raw_metadata_df <- read.csv(file.path(input_folder, "metadata_tidy.csv"), as.is=TRUE)
 raw_trace_df <- read.csv(file.path(input_folder, "trace_tidy.csv"), as.is=TRUE)
+raw_param_df <- read.csv(file.path(input_folder, "params_tidy.csv"), as.is=TRUE)
+mcmc_diagnostics_df <- read.csv(file.path(input_folder, "mcmc_diagnostics_tidy.csv"), as.is=TRUE)
 
 num_methods <- length(unique(raw_posteriors_df$method))
 
@@ -36,8 +40,10 @@ metadata_df <-
     raw_metadata_df %>%
     filter(!(model %in% bad_models)) %>%
     filter(!(model %in% repeated_models)) %>%
+    filter(!(model %in% mcmc_bad_models)) %>%
     mutate(is_arm = IsARM(model),
-           time_per_op=runtime / op_count)
+           time_per_op=runtime / op_count,
+           converged=as.logical(converged))
 save_list[["metadata_df"]] <- metadata_df
 
 
@@ -88,6 +94,50 @@ stopifnot(length(intersect(arm_models, incomplete_models)) == 0)
 
 
 head(posteriors_df)
+
+
+
+
+########################################
+# Check convergence
+
+
+posteriors_df %>%
+    filter(is.na(converged)) %>%
+    pull(method) %>% unique()
+
+# Basically SADVI and RAABVI rarely converge?
+posteriors_df %>%
+    group_by(method) %>%
+    summarize(prop_converged=mean(converged))
+
+mcmc_nonconverged_models <-
+    posteriors_df %>%
+    filter(method == 'NUTS', !converged) %>%
+    pull(model) %>%
+    unique()
+
+filter(mcmc_diagnostics_df, model %in% mcmc_nonconverged_models) %>%
+    group_by(model) %>%
+    summarize(min_rhat=min(rhat, na.rm=TRUE),
+              max_rhat=max(rhat, na.rm=TRUE),
+              min_ess=min(ess),
+              median_ess=median(ess),
+              q10_ess=quantile(ess, 0.1))
+
+# This is no good
+filter(mcmc_diagnostics_df, model == "election88_full")
+
+setdiff(mcmc_nonconverged_models, mcmc_bad_models)
+
+filter(mcmc_diagnostics_df, model == "microcredit")
+
+    
+posteriors_df %>%
+    group_by(method) %>%
+    summarize(prop_converged=mean(converged))
+
+
 
 
 ########################################
@@ -213,7 +263,7 @@ if (FALSE) {
         scale_x_log10()
 }
 
-# Compare the timem to termination (if not convergence)
+# Compare the time to termination (if not convergence)
 runtime_comp_df <-
     inner_join(filter(metadata_df, method != "DADVI") %>% 
                    select(method, model, runtime, op_count, time_per_op, converged),
@@ -308,11 +358,6 @@ save_list[["runtime_comp_df"]] <- runtime_comp_df
 
 ########################################
 # Explore a little
-
-# Basically SADVI and RAABVI rarely converge?
-posteriors_df %>%
-    group_by(method) %>%
-    summarize(prop_converged=mean(converged))
 
 
 # Hmm, something's up with microcredit
@@ -508,9 +553,11 @@ if (FALSE) {
 }
 
 
-#############################
-# Save
+##################################################################################
+# Save.  For now let's only do this manually to avoid overwriting accidentally
 
-output_file <- file.path(output_folder, "posterior_summary.Rdata")
-print(output_file)
-save(save_list, file=output_file)
+if (FALSE) {
+    output_file <- file.path(output_folder, "posterior_summary.Rdata")
+    print(output_file)
+    save(save_list, file=output_file)
+}
