@@ -187,7 +187,8 @@ def GetObjectiveTraces(method, metadata):
         step_hist = missing_value
     elif method == 'RAABBVI':
         obj_hist = np.array(metadata['kl_hist'])
-        step_hist = np.array(metadata['kl_hist_i'])
+        # Change the zero-indexed steps to one-indexed steps
+        step_hist = np.array(metadata['kl_hist_i']) + 1
     elif method == 'DADVI':
         obj_hist = np.array(metadata['kl_hist'])
         opt_sequence = metadata['opt_sequence']

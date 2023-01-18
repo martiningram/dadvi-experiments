@@ -76,6 +76,7 @@ filter(model_methods, model %in% incomplete_models) %>%
     mutate(value=TRUE) %>%
     pivot_wider(id_cols=model, names_from=method)
 
+filter(model_methods, model == "potus")
 
 posteriors_df <-
     raw_posteriors_df %>%
@@ -226,11 +227,29 @@ trace_df <-
     mutate(is_arm=IsARM(model))
 save_list[["trace_df"]] <- trace_df
 
+# DADVI doesn't start counting at one
+trace_df %>%
+    group_by(model, method) %>%
+    summarize(min_n_calls=min(n_calls))
+
 
 if (FALSE) {
     length(non_arm_models)
-    ind <- 4
+    ind <- 2
     ggplot(trace_df %>% filter(model == non_arm_models[ind])) +
+        geom_line(aes(x=n_calls, y=obj_value, color=method, 
+                      group=paste0(method, model))) +
+        scale_y_log10() +
+        scale_x_log10() +
+        # geom_hline(aes(yintercept=1)) +
+        ggtitle(non_arm_models[ind])
+
+    trace_df %>%
+        group_by(model) %>%
+        mutate(n_call_prop = n_calls / max(n_calls),
+               obj_value_prop = obj_value - min(obj_value) + 1) %>%
+        ungroup() %>%
+    ggplot() +
         geom_line(aes(x=n_call_prop, y=obj_value_prop, color=method, 
                       group=paste0(method, model))) +
         scale_y_log10() +
@@ -244,6 +263,23 @@ final_trace_df <-
     trace_df %>%
     group_by(model, method) %>%
     filter(n_calls == max(n_calls))
+
+trace_normed_df <- 
+    inner_join(trace_df,
+               final_trace_df %>% filter(method=="DADVI"),
+               by=c("model", "is_arm"), suffix=c("", "_final")) %>%
+        mutate(obj_value_norm=obj_value / obj_value_final,
+               n_calls_norm=n_calls / n_calls_final)
+
+ggplot() +
+    geom_line(aes(x=n_calls_norm, y=obj_value_norm, color=method, group=paste(method, model)), 
+              data=filter(trace_normed_df, method == "RAABBVI")) +
+    geom_line(aes(x=n_calls_norm, y=obj_value_norm, color=method, group=paste(method, model)), 
+              data=filter(trace_normed_df, method == "DADVI")) +
+    scale_y_log10() +
+    scale_x_log10() +
+    ylim(NA, 1e3) +
+    geom_hline(aes(yintercept=1))
 
 
 final_trace_comp_df <-
