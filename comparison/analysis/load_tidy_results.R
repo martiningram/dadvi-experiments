@@ -1,5 +1,7 @@
 library(gridExtra)
 library(tidyverse)
+library(shiny)
+
 
 # These test models shouldn't really be in there
 bad_models <- c("test", "test_rstanarm")
@@ -209,6 +211,8 @@ if (FALSE) {
 ############################################
 # Get optimization traces
 
+
+
 valid_trace_methods <-
     raw_trace_df %>%
     filter(!is.na(n_calls)) %>%
@@ -227,7 +231,7 @@ trace_df <-
     mutate(is_arm=IsARM(model))
 save_list[["trace_df"]] <- trace_df
 
-# DADVI doesn't start counting at one
+# DADVI doesn't start counting at one :(
 trace_df %>%
     group_by(model, method) %>%
     summarize(min_n_calls=min(n_calls))
@@ -243,19 +247,76 @@ if (FALSE) {
         scale_x_log10() +
         # geom_hline(aes(yintercept=1)) +
         ggtitle(non_arm_models[ind])
-
-    trace_df %>%
+    
+    
+    # Get a "scale" by looking at the sd of the final 5% (or 100) SADVI iterates
+    trace_scales_df <-
+        trace_df %>%
+        filter(method == "SADVI") %>%
         group_by(model) %>%
-        mutate(n_call_prop = n_calls / max(n_calls),
-               obj_value_prop = obj_value - min(obj_value) + 1) %>%
-        ungroup() %>%
-    ggplot() +
-        geom_line(aes(x=n_call_prop, y=obj_value_prop, color=method, 
-                      group=paste0(method, model))) +
-        scale_y_log10() +
+        mutate(max_n_calls=max(n_calls)) %>%
+        mutate(n_calls_prop=n_calls / max_n_calls) %>%
+        filter((n_calls_prop > 0.95) | (max(n_calls) - n_calls < 100)) %>%
+        summarise(n=n(), obj_value_sd=sd(obj_value)) %>%
+        select(model, obj_value_sd)
+
+    # Get a "location" by looking at termination of the DADVI algorithm
+    trace_offset_df <-
+        trace_df %>%
+        filter(method == "DADVI") %>%
+        group_by(model) %>%
+        filter(n_calls == max(n_calls)) %>%
+        rename(n_calls_dadvi=n_calls, obj_value_dadvi=obj_value) %>%
+        select(model, n_calls_dadvi, obj_value_dadvi)
+    
+    
+    
+    Cap <- function(x, min=-1e3, max=1e3) { 
+        return(case_when(x < min ~ min,
+                         x > max ~ max,
+                         TRUE ~ x))        
+    }
+
+    # Compute "normed" objective values for common plotting
+    # Note!  Here I fix the fact that RAABBVI starts at zero rather than one.
+    # when this is fixed elsewhere remember to change it here too.
+    trace_norm_df <-
+        trace_df %>%
+        mutate(n_calls=case_when(method == "RAABBVI" ~ n_calls + 1, TRUE ~ n_calls)) %>%
+        inner_join(trace_scales_df, by="model") %>%
+        inner_join(trace_offset_df, by="model") %>%
+        mutate(n_calls_norm=n_calls / n_calls_dadvi,
+               obj_value_norm=(obj_value - obj_value_dadvi) / obj_value_sd,
+               obj_value_norm_cap=Cap(obj_value_norm, min=-Inf, max=1e5))
+
+    # Get the termination point of each method 
+    trace_norm_termination_df <-
+        trace_norm_df %>%
+        group_by(model, method) %>%
+        filter(n_calls == max(n_calls))
+    
+    View(trace_norm_termination_df)
+    
+    SignedLog10 <- function(x) {
+        case_when(x == 0 ~ 0,
+                  TRUE ~ sign(x) * log10(abs(x)))
+    }
+    
+    SignedLog10Transform <- scales::trans_new(
+        "signed_log10",
+        SignedLog10,
+        function(x) { sign(x) * exp(abs(x)) })
+    
+    
+    ggplot(trace_norm_df) +
+        geom_line(aes(x=n_calls_norm, y=obj_value_norm, color=method, group=paste0(method, model))) +
+        geom_point(aes(x=n_calls_norm, y=obj_value_norm, group=paste0(method, model)),
+                   data=trace_norm_termination_df) +
+        scale_y_continuous(trans=SignedLog10Transform) +
         scale_x_log10() +
-        geom_hline(aes(yintercept=1)) +
-        ggtitle(non_arm_models[ind])
+        geom_hline(aes(yintercept=0)) +
+        geom_vline(aes(xintercept=1)) +
+        facet_grid(method ~ .)
 
 }
 
@@ -271,15 +332,44 @@ trace_normed_df <-
         mutate(obj_value_norm=obj_value / obj_value_final,
                n_calls_norm=n_calls / n_calls_final)
 
-ggplot() +
-    geom_line(aes(x=n_calls_norm, y=obj_value_norm, color=method, group=paste(method, model)), 
-              data=filter(trace_normed_df, method == "RAABBVI")) +
-    geom_line(aes(x=n_calls_norm, y=obj_value_norm, color=method, group=paste(method, model)), 
-              data=filter(trace_normed_df, method == "DADVI")) +
-    scale_y_log10() +
-    scale_x_log10() +
-    ylim(NA, 1e3) +
-    geom_hline(aes(yintercept=1))
+if (FALSE) {
+    # Ugh
+    
+    ggplot() +
+        geom_line(aes(x=n_calls_norm, y=obj_value_norm - 1, color=method, group=paste(method, model)), 
+                  data=filter(trace_normed_df, method == "RAABBVI")) +
+        geom_line(aes(x=n_calls_norm, y=obj_value_norm - 1, color=method, group=paste(method, model)), 
+                  data=filter(trace_normed_df, method == "DADVI")) +
+        scale_y_continuous(trans=
+                               scales::trans_new(
+                                   "signed_log10",
+                                   function(x) { sign(x) * log10(abs(x)) },
+                                   function(x) { sign(x) * exp(abs(x)) })) +
+        #scale_x_log10() +
+        ylim(-1e3, 1e3) +
+        xlim(0, 5) +
+        geom_hline(aes(yintercept=0))
+
+    
+    ggplot() +
+        geom_line(aes(x=n_calls_norm, y=obj_value_norm - 1, color=method, group=paste(method, model)), 
+                  data=filter(trace_normed_df, method == "RAABBVI")) +
+        geom_line(aes(x=n_calls_norm, y=obj_value_norm - 1, color=method, group=paste(method, model)), 
+                  data=filter(trace_normed_df, method == "DADVI")) +
+        scale_y_continuous(trans="atanh") +
+        scale_x_log10()
+
+    
+    
+    
+    
+    ggplot(trace_normed_df) +
+        geom_line(aes(x=n_calls_norm + 1e-3, y=obj_value_norm - 1, color=method, group=paste(method, model))) +
+        scale_y_continuous(trans="atanh") +
+        scale_x_log10() +
+        facet_grid(method ~ .)
+    
+}
 
 
 final_trace_comp_df <-
@@ -391,7 +481,7 @@ if (FALSE) {
 save_list[["runtime_comp_df"]] <- runtime_comp_df
 
 
-
+########################################
 ########################################
 # Explore a little
 
@@ -402,6 +492,12 @@ posteriors_df %>%
     select(model, param, ind, mean, sd, method)
 
 
+########################################
+########################################
+########################################
+########################################
+########################################
+# Posteriors
 
 ########################################
 # Compare to a reference method
@@ -428,7 +524,7 @@ filter(results_df, sd_ref < 1e-6) %>%
 
 
 ########################################
-# Aggregate and compare results
+# Aggregate and compare posterior results
 
 GetMethodComparisonDf <- function(results_df, method1, method2, group_cols) {
     # group_cols should be a string vector (for inner_join)
@@ -597,3 +693,69 @@ if (FALSE) {
     print(output_file)
     save(save_list, file=output_file)
 }
+
+
+
+# Shiny?
+
+
+
+datasets <- c("eurodist", "faithful", "sleep")
+ui <- fluidPage(
+    selectInput("dataset", "Dataset", choices = datasets),
+    verbatimTextOutput("summary"),
+    plotOutput("plot")
+)
+
+server <- function(input, output, session) {
+    dataset <- reactive({
+        get(input$dataset, "package:datasets")
+    })
+    output$summary <- renderPrint({
+        summary(dataset())
+    })
+    output$plot <- renderPlot({
+        plot(dataset())
+    }, res = 96)
+}
+
+shinyApp(ui, server)
+
+
+
+#########################
+
+
+ui <- fluidPage(
+    #numericInput("model_index", "Model index", 1, min=1, max=length(arm_models), step=1),
+    numericInput("model_index", "Model index", 1, min=1, max=length(non_arm_models), step=1),
+    plotOutput("plot")
+)
+
+server <- function(input, output, session) {
+    selected_model <- reactive({
+        #arm_models[input$model_index]
+        non_arm_models[input$model_index]
+    })
+    dataset <- reactive({
+        trace_df %>% filter(model == selected_model())
+    })
+    output$plot <- renderPlot({
+        ggplot(dataset()) +
+            geom_line(aes(x=n_calls, y=obj_value, color=method, 
+                          group=paste0(method, model))) +
+            scale_y_log10() +
+            scale_x_log10() +
+            ggtitle(selected_model())
+    }, res = 96)
+}
+
+shinyApp(ui, server)
+
+
+
+
+
+
+
+
