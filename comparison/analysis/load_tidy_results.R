@@ -16,6 +16,8 @@ repeated_models <- c(
 # These models didn't work with NUTS well enough to use here.
 mcmc_bad_models <- c("earnings_latin_square", "earnings_vary_si", "election88_full")
 
+models_to_remove <- c(bad_models, non_arm_models, repeated_models, mcmc_bad_models)
+
 # This function is more convenient than always grouping and merging on is_arm
 IsARM <- function(model) { !(model %in% non_arm_models) }
 
@@ -40,9 +42,7 @@ num_methods <- length(unique(raw_posteriors_df$method))
 
 metadata_df <-
     raw_metadata_df %>%
-    filter(!(model %in% bad_models)) %>%
-    filter(!(model %in% repeated_models)) %>%
-    filter(!(model %in% mcmc_bad_models)) %>%
+    filter(!(model %in% models_to_remove)) %>%
     mutate(is_arm = IsARM(model),
            time_per_op=runtime / op_count,
            converged=as.logical(converged))
@@ -224,6 +224,7 @@ head(raw_trace_df)
 
 trace_df <-
     filter(raw_trace_df, method %in% valid_trace_methods) %>%
+    filter(!(model %in% models_to_remove)) %>%
     # group_by(model) %>%
     # mutate(n_call_prop = n_calls / max(n_calls),
     #        obj_value_prop = obj_value - min(obj_value) + 1) %>%
@@ -237,88 +238,161 @@ trace_df %>%
     summarize(min_n_calls=min(n_calls))
 
 
+
+# Get a "scale" by looking at the sd of the final 5% (or 100) SADVI iterates
+trace_scales_df <-
+    trace_df %>%
+    filter(method == "SADVI") %>%
+    group_by(model) %>%
+    mutate(max_n_calls=max(n_calls)) %>%
+    mutate(n_calls_prop=n_calls / max_n_calls) %>%
+    filter((n_calls_prop > 0.95) | (max(n_calls) - n_calls < 100)) %>%
+    summarise(n=n(), obj_value_sd=sd(obj_value)) %>%
+    select(model, obj_value_sd)
+
 if (FALSE) {
-    length(non_arm_models)
-    ind <- 2
-    ggplot(trace_df %>% filter(model == non_arm_models[ind])) +
-        geom_line(aes(x=n_calls, y=obj_value, color=method, 
-                      group=paste0(method, model))) +
-        scale_y_log10() +
-        scale_x_log10() +
-        # geom_hline(aes(yintercept=1)) +
-        ggtitle(non_arm_models[ind])
+    # Sanity check our "scales"
+    trace_models <- unique(trace_df$model)
+    ui <- fluidPage(
+        numericInput("model_index", "Model index", 1, min=1, max=length(trace_models), step=1),
+        plotOutput("plot")
+    )
     
-    
-    # Get a "scale" by looking at the sd of the final 5% (or 100) SADVI iterates
-    trace_scales_df <-
-        trace_df %>%
-        filter(method == "SADVI") %>%
-        group_by(model) %>%
-        mutate(max_n_calls=max(n_calls)) %>%
-        mutate(n_calls_prop=n_calls / max_n_calls) %>%
-        filter((n_calls_prop > 0.95) | (max(n_calls) - n_calls < 100)) %>%
-        summarise(n=n(), obj_value_sd=sd(obj_value)) %>%
-        select(model, obj_value_sd)
-
-    # Get a "location" by looking at termination of the DADVI algorithm
-    trace_offset_df <-
-        trace_df %>%
-        filter(method == "DADVI") %>%
-        group_by(model) %>%
-        filter(n_calls == max(n_calls)) %>%
-        rename(n_calls_dadvi=n_calls, obj_value_dadvi=obj_value) %>%
-        select(model, n_calls_dadvi, obj_value_dadvi)
-    
-    
-    
-    Cap <- function(x, min=-1e3, max=1e3) { 
-        return(case_when(x < min ~ min,
-                         x > max ~ max,
-                         TRUE ~ x))        
+    server <- function(input, output, session) {
+        selected_model <- reactive({
+            trace_models[input$model_index]
+        })
+        dataset <- reactive({
+            trace_df %>% 
+                filter(model == selected_model()) %>%
+                filter(method == "SADVI") %>%
+                group_by(model) %>%
+                mutate(max_n_calls=max(n_calls)) %>%
+                mutate(n_calls_prop=n_calls / max_n_calls) %>%
+                filter((n_calls_prop > 0.95) | (max(n_calls) - n_calls < 100)) %>%
+                mutate(obj_value_z=(obj_value - mean(obj_value)) / sd(obj_value))
+        })
+        output$plot <- renderPlot({
+            ggplot(dataset()) +
+                geom_line(aes(x=n_calls_prop, y=obj_value_z, group=model)) +
+                ggtitle(selected_model())
+        }, res = 96)
     }
-
-    # Compute "normed" objective values for common plotting
-    # Note!  Here I fix the fact that RAABBVI starts at zero rather than one.
-    # when this is fixed elsewhere remember to change it here too.
-    trace_norm_df <-
-        trace_df %>%
-        mutate(n_calls=case_when(method == "RAABBVI" ~ n_calls + 1, TRUE ~ n_calls)) %>%
-        inner_join(trace_scales_df, by="model") %>%
-        inner_join(trace_offset_df, by="model") %>%
-        mutate(n_calls_norm=n_calls / n_calls_dadvi,
-               obj_value_norm=(obj_value - obj_value_dadvi) / obj_value_sd,
-               obj_value_norm_cap=Cap(obj_value_norm, min=-Inf, max=1e5))
-
-    # Get the termination point of each method 
-    trace_norm_termination_df <-
-        trace_norm_df %>%
-        group_by(model, method) %>%
-        filter(n_calls == max(n_calls))
     
+    shinyApp(ui, server)
+}
+
+# Get a "location" by looking at termination of the DADVI algorithm
+trace_offset_df <-
+    trace_df %>%
+    filter(method == "DADVI") %>%
+    group_by(model) %>%
+    filter(n_calls == max(n_calls)) %>%
+    rename(n_calls_dadvi=n_calls, obj_value_dadvi=obj_value) %>%
+    select(model, n_calls_dadvi, obj_value_dadvi)
+
+
+
+Cap <- function(x, min=-1e3, max=1e3) { 
+    return(case_when(x < min ~ min,
+                     x > max ~ max,
+                     TRUE ~ x))        
+}
+
+# Compute "normed" objective values for common plotting
+# Note!  Here I fix the fact that RAABBVI starts at zero rather than one.
+# when this is fixed elsewhere remember to change it here too.
+trace_norm_df <-
+    trace_df %>%
+    mutate(n_calls=case_when(method == "RAABBVI" ~ n_calls + 1, TRUE ~ n_calls)) %>%
+    inner_join(trace_scales_df, by="model") %>%
+    inner_join(trace_offset_df, by="model") %>%
+    mutate(n_calls_norm=n_calls / n_calls_dadvi,
+           obj_value_norm=(obj_value - obj_value_dadvi) / obj_value_sd,
+           obj_value_norm_cap=Cap(obj_value_norm, min=-Inf, max=1e5))
+
+# Get the termination point of each method 
+trace_norm_termination_df <-
+    trace_norm_df %>%
+    group_by(model, method) %>%
+    filter(n_calls == max(n_calls))
+
+if (FALSE) {
     View(trace_norm_termination_df)
+}
     
-    SignedLog10 <- function(x) {
-        case_when(x == 0 ~ 0,
-                  TRUE ~ sign(x) * log10(abs(x)))
-    }
+SignedLog10 <- function(x) {
+    case_when(x == 0 ~ 0,
+              TRUE ~ sign(x) * log10(abs(x)))
+}
+
+SignedLog10Transform <- scales::trans_new(
+    "signed_log10",
+    SignedLog10,
+    function(x) { sign(x) * 10^(abs(x)) }
+    # breaks=function(b) { 10^round(SignedLog10(b)) },
+    # minor_breaks=function(b, limits, n) { c() }
+    )
+
+RightLog10 <- function(x) {
+    case_when(x < 1 ~ x,
+              TRUE ~ log10(x) + 1)
+}
+RightExp10 <- function(x) {
+    case_when(x < 1 ~ x,
+              TRUE ~ 10^(x - 1))
+}
+
+RightLog10Transform <- scales::trans_new(
+    "right_log10",
+    RightLog10, RightExp10
+)
     
-    SignedLog10Transform <- scales::trans_new(
-        "signed_log10",
-        SignedLog10,
-        function(x) { sign(x) * exp(abs(x)) })
-    
-    
+if (FALSE) {
+    break_steps <- 10 ^ seq(0, 9)
+    breaks <- sort(c(-break_steps, break_steps))
     ggplot(trace_norm_df) +
         geom_line(aes(x=n_calls_norm, y=obj_value_norm, color=method, group=paste0(method, model))) +
         geom_point(aes(x=n_calls_norm, y=obj_value_norm, group=paste0(method, model)),
                    data=trace_norm_termination_df) +
-        scale_y_continuous(trans=SignedLog10Transform) +
+        scale_y_continuous(trans=SignedLog10Transform, breaks=breaks) +
+        #scale_x_continuous(trans=RightLog10Transform) +
         scale_x_log10() +
         geom_hline(aes(yintercept=0)) +
         geom_vline(aes(xintercept=1)) +
         facet_grid(method ~ .)
-
 }
+
+
+if (FALSE) {
+    # Look at single model / method traces
+    trace_models <- unique(trace_norm_df$model)
+    ui <- fluidPage(
+        numericInput("model_index", "Model index", 1, min=1, max=length(trace_models), step=1),
+        plotOutput("plot")
+    )
+    
+    server <- function(input, output, session) {
+        selected_model <- reactive({
+            trace_models[input$model_index]
+        })
+        dataset <- reactive({
+            trace_norm_df %>% 
+                filter(model == selected_model()) %>%
+                filter(method == "DADVI")
+        })
+        output$plot <- renderPlot({
+            ggplot(dataset()) +
+                geom_line(aes(x=n_calls_norm, y=obj_value_norm, group=model)) +
+                ggtitle(selected_model()) +
+                scale_x_log10() +
+                scale_y_continuous(trans=SignedLog10Transform, breaks=breaks)
+        }, res = 96)
+    }
+    
+    shinyApp(ui, server)
+}
+
 
 final_trace_df <-
     trace_df %>%
