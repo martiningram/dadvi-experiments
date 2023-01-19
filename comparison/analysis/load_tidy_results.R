@@ -16,7 +16,7 @@ repeated_models <- c(
 # These models didn't work with NUTS well enough to use here.
 mcmc_bad_models <- c("earnings_latin_square", "earnings_vary_si", "election88_full")
 
-models_to_remove <- c(bad_models, non_arm_models, repeated_models, mcmc_bad_models)
+models_to_remove <- c(bad_models, repeated_models, mcmc_bad_models)
 
 # This function is more convenient than always grouping and merging on is_arm
 IsARM <- function(model) { !(model %in% non_arm_models) }
@@ -349,18 +349,37 @@ RightLog10Transform <- scales::trans_new(
 )
     
 if (FALSE) {
-    break_steps <- 10 ^ seq(0, 9)
-    breaks <- sort(c(-break_steps, break_steps))
-    ggplot(trace_norm_df) +
-        geom_line(aes(x=n_calls_norm, y=obj_value_norm, color=method, group=paste0(method, model))) +
-        geom_point(aes(x=n_calls_norm, y=obj_value_norm, group=paste0(method, model)),
-                   data=trace_norm_termination_df) +
-        scale_y_continuous(trans=SignedLog10Transform, breaks=breaks) +
-        #scale_x_continuous(trans=RightLog10Transform) +
-        scale_x_log10() +
-        geom_hline(aes(yintercept=0)) +
-        geom_vline(aes(xintercept=1)) +
+    # This is the one!
+    
+    PlotTraces <- function(df) {
+        trace_norm_termination_df <-
+            df %>%
+            group_by(model, method) %>%
+            filter(n_calls == max(n_calls))
+        break_steps <- 10 ^ seq(0, 9)
+        breaks <- sort(c(-break_steps, break_steps))
+        ggplot(df) +
+            geom_line(aes(x=n_calls_norm, y=obj_value_norm, color=method, group=paste0(method, model))) +
+            geom_point(aes(x=n_calls_norm, y=obj_value_norm, group=paste0(method, model)),
+                       data=trace_norm_termination_df) +
+            scale_y_continuous(trans=SignedLog10Transform, breaks=breaks) +
+            scale_x_continuous(trans=RightLog10Transform) +
+            #scale_x_log10() +
+            geom_hline(aes(yintercept=0)) +
+            geom_vline(aes(xintercept=1)) +
+            xlab("Number of function calls / number of DADVI function calls\n(Values > 1 are log10 transformed)") +
+            ylab("(ELBO - DADVI optimal ELBO) / SADVI optimal ELBO standard deviation \n(signed log10 transformed)")
+    }
+    
+    PlotTraces(trace_norm_df %>% filter(is_arm)) +
+        ggtitle("Standardized optimization traces for ARM") +
         facet_grid(method ~ .)
+
+    trace_norm_df %>% filter(!is_arm) %>% mutate(model=as.character(model)) %>% pull(model) %>% class()
+    PlotTraces(trace_norm_df %>% filter(!is_arm))  +
+        ggtitle("Standardized optimization traces for non-ARM") +
+        facet_grid(method ~ model)
+    
 }
 
 
@@ -379,13 +398,15 @@ if (FALSE) {
         dataset <- reactive({
             trace_norm_df %>% 
                 filter(model == selected_model()) %>%
-                filter(method == "DADVI")
+                filter(method == "RAABBVI")
         })
         output$plot <- renderPlot({
             ggplot(dataset()) +
                 geom_line(aes(x=n_calls_norm, y=obj_value_norm, group=model)) +
                 ggtitle(selected_model()) +
                 scale_x_log10() +
+                geom_hline(aes(yintercept=0)) +
+                geom_vline(aes(xintercept=1)) +
                 scale_y_continuous(trans=SignedLog10Transform, breaks=breaks)
         }, res = 96)
     }
