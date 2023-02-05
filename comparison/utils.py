@@ -17,6 +17,7 @@ import pymc as pm
 from jax.flatten_util import ravel_pytree
 from datetime import datetime
 import socket
+from time import time
 
 
 NON_ARM_MODELS = ["microcredit", "occ_det", "potus", "tennis"]
@@ -93,6 +94,7 @@ def pymc_advi_history_callback(Approximation, losses, i, record_every=100):
 
     means = Approximation.mean.eval()
     sds = Approximation.std.eval()
+    cur_time = time()
 
     mean_dict = flat_results_to_dict(means, Approximation)
     sd_dict = flat_results_to_dict(sds, Approximation)
@@ -100,7 +102,7 @@ def pymc_advi_history_callback(Approximation, losses, i, record_every=100):
     # TODO: Use these results to compute the ELBO
     # Slight problem is that I need to make sure the ordering agrees.
     pymc_advi_history_callback.kl_history.append(
-        (i, {"means": mean_dict, "sds": sd_dict})
+        (i, {"means": mean_dict, "sds": sd_dict, "time": cur_time})
     )
 
 
