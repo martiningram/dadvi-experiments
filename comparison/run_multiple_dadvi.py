@@ -44,16 +44,19 @@ init_means = np.zeros(jax_funs["n_params"])
 init_log_vars = np.zeros(jax_funs["n_params"]) - 3
 init_var_params = np.concatenate([init_means, init_log_vars])
 
-# For the first run, we use doubling to pick an M
+# TODO: We don't double any more -- so maybe we shouldn't be calling this
 opt_result = optimise_dadvi_by_doubling(
     init_var_params,
     dadvi_funs,
     seed=2,
     verbose=True,
-    start_m_power=min_m_power,
-    max_m_power=min_m_power,  # No doubling!
+    start_m=2**min_m_power,
+    max_m=2**min_m_power,  # No doubling!
     max_freq_to_posterior_ratio=0.5,
 )
+
+# Pick the last one
+opt_result = opt_result[max(opt_result.keys())]
 
 # Get the results from our reference run:
 opt = opt_result["dadvi_result"]["optimisation_result"]
@@ -102,8 +105,10 @@ for cur_run in range(n_reruns):
     rerun_results.append(
         {
             "means": rerun_means,
+            "means_with_names": jax_funs["unflatten_fun"](rerun_means),
             "seed": cur_seed,
             "freq_sds": freq_sds_rerun,
+            "freq_sds_with_names": jax_funs["unflatten_fun"](freq_sds),
             "newton_step_norm": newton_step_norm,
             "scipy_opt_result": opt["opt_result"],
             "lrvb_hvp_calls": result["lrvb_hvp_calls"],
