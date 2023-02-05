@@ -61,6 +61,33 @@ def GetMethodDataframe(folder, method):
     return method_df
 
 
+def GetEvaluationCount(method, metadata):
+    missing_value = float('NaN')
+    if method == 'NUTS':
+        # Need to save the number of draws in the metadata
+        n_calls = missing_value
+    elif method == 'RAABBVI':
+        n_calls = metadata['kl_hist_i'].max()
+    elif method == 'DADVI':
+        evaluation_count = metadata['opt_result']['evaluation_count']
+        n_calls = evaluation_count['n_hvp_calls'] + \
+            evaluation_count['n_val_and_grad_calls']
+    elif method == 'LRVB':
+        # Need to save the extra LRVB iterations in the metadata
+        n_calls = missing_value
+    elif method == 'SADVI':
+        n_calls = metadata['steps']
+    elif method == 'SADVI_FR':
+        # This is not apples-to-apples obviously
+        n_calls = metadata['steps']
+    elif method == 'LRVB_Doubling':
+        # Need to save all the steps in the metadata
+        n_calls = missing_value
+    else:
+        raise ValueError(f'Invalid method {method}\n')
+    return n_calls
+
+
 def CheckConvergence(method, metadata):
     missing_value = float('NaN')
     if method == 'NUTS':
@@ -114,7 +141,78 @@ def GetMetadataDataframe(folder, method, return_raw_metadata=False):
         'method': RepList(method, len(raw_metadata)),
         'model': model_names,
         'runtime': [ m['runtime'] for m in raw_metadata ],
-        'converged': [ CheckConvergence(method, m) for m in raw_metadata ]
+        'converged': [ CheckConvergence(method, m) for m in raw_metadata ],
+        'op_count': [ GetEvaluationCount(method, m) for m in raw_metadata ]
         } )
 
     return metadata_df
+
+
+def GetObjectiveTraces(method, metadata):
+    missing_value = [ float('NaN') ]
+    if method == 'NUTS':
+        # Doesn't make sense for NUTS
+        obj_hist = missing_value
+        step_hist = missing_value
+    elif method == 'RAABBVI':
+        obj_hist = np.array(metadata['kl_hist'])
+        step_hist = np.array(metadata['kl_hist_i'])
+    elif method == 'DADVI':
+        obj_hist = np.array(metadata['kl_hist'])
+        opt_sequence = metadata['opt_sequence']
+        step_hist = np.array([ o['val_and_grad_calls'] +
+                               o['hvp_calls'] for o in opt_sequence ])
+        if len(step_hist) != len(obj_hist):
+            raise ValueError(
+                f'Different lengths for histories: '+
+                f'{len(step_hist)} != {len(obj_hist)}')
+    elif method == 'LRVB':
+        # Doesn't make sense for LRVB
+        obj_hist = missing_value
+        step_hist = missing_value
+    elif method == 'SADVI':
+        # TODO: Save KL traces for SADVI
+        obj_hist = missing_value
+        step_hist = missing_value
+    elif method == 'SADVI_FR':
+        # TODO: Save KL traces for SADVI
+        obj_hist = missing_value
+        step_hist = missing_value
+    elif method == 'LRVB_Doubling':
+        # TODO: make sure this makese sense
+        obj_hist = missing_value
+        step_hist = missing_value
+    else:
+        print(f'Invalid method {method}\n')
+        assert(False)
+
+    return step_hist, obj_hist
+
+
+def GetTraceDataframe(folder, method):
+    draw_filenames, model_names = GetDrawFilenames(folder)
+    raw_metadata = GetMetadataDataframe(folder, method, return_raw_metadata=True)
+    traces = [ GetObjectiveTraces(method, m) for m in raw_metadata ]
+
+    trace_dict = {
+        'model': [],
+        'n_calls': [],
+        'obj_value': []
+    }
+
+    assert(len(traces) == len(model_names))
+    for model_ind in range(len(traces)):
+        model = model_names[model_ind]
+        step_hist, obj_hist = traces[model_ind]
+        assert(len(step_hist) == len(obj_hist))
+        num_rows = len(step_hist)
+        trace_dict['model'].append(RepList(model, num_rows))
+        trace_dict['n_calls'].append(step_hist)
+        trace_dict['obj_value'].append(obj_hist)
+
+    trace_df = pd.DataFrame()
+    for k,v in trace_dict.items():
+        trace_df[k] = np.hstack(v)
+    trace_df['method'] = method
+
+    return trace_df
