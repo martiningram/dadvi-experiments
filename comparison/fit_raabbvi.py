@@ -57,9 +57,8 @@ viabel_dict = transform_dadvi_draws(
     keep_untransformed=True,
 )
 
-compute_kl_every = 100
+compute_kl_every = 10
 
-# TODO: Extract these instead the same way as we do for DADVI.
 viabel_i = (
     np.arange(viabel_result["variational_param_history"].shape[0])[::compute_kl_every]
     * num_mc_samples
