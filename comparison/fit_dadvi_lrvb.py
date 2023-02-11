@@ -89,7 +89,7 @@ if __name__ == "__main__":
         keep_untransformed=True,
     )
 
-    target_dir = join(target_dir, f"lrvb_results_{lrvb_method}")
+    target_dir = join(target_dir, f"lrvb_{lrvb_method}_results")
 
     makedirs(join(target_dir, "draw_dicts"), exist_ok=True)
     makedirs(join(target_dir, "lrvb_info"), exist_ok=True)
