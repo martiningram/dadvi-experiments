@@ -60,18 +60,21 @@ if __name__ == "__main__":
     )
     dadvi_res = opt["opt_result"].x
 
+    start_time_lrvb = time.time()
     decorated_hvp = count_decorator(dadvi_funs.kl_est_hvp_fun)
 
     if lrvb_method == "Direct":
         lrvb_cov = compute_lrvb_covariance_direct_method(dadvi_res, zs, decorated_hvp)
     else:
         lrvb_cov = compute_lrvb_covariance_cg(dadvi_res, zs, decorated_hvp)
+    finish_time_lrvb = time.time()
 
     finish_time = time.time()
 
     lrvb_hvp_calls = decorated_hvp.calls
 
     runtime_dadvi = finish_time - start_time
+    runtime_lrvb = finish_time_lrvb - start_time_lrvb
     dadvi_opt_sequence = opt_callback_fun.opt_sequence
 
     z = np.random.randn(1000, jax_funs["n_params"])
@@ -106,6 +109,7 @@ if __name__ == "__main__":
                 "kl_hist": kl_hist_dadvi,
                 "opt_sequence": dadvi_opt_sequence,
                 "runtime": runtime_dadvi,
+                "runtime_lrvb": runtime_lrvb,
                 "lrvb_cov": lrvb_cov,
                 "newton_step_norm": opt["newton_step_norm"],
                 "newton_step": opt["newton_step"],
