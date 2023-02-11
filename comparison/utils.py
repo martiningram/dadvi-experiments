@@ -60,6 +60,25 @@ def estimate_kl_fresh_draws(dadvi_funs, var_params, n_draws=1000, seed=None):
     return dadvi_funs.kl_est_and_grad_fun(var_params, cur_z)[0]
 
 
+def estimate_kl_stderr_fresh_draws(dadvi_funs, var_params, n_draws=1000, seed=None):
+
+    n_params = len(var_params) // 2
+
+    if seed is not None:
+        np.random.seed(seed)
+
+    cur_z = np.random.randn(n_draws, n_params)
+
+    individual_results = [
+        dadvi_funs.kl_est_and_grad_fun(var_params, cur_z[[i]])[0]
+        for i in range(n_draws)
+    ]
+
+    stdev = np.std(individual_results)
+
+    return stdev / np.sqrt(n_draws)
+
+
 def arviz_to_draw_dict(az_trace):
     # Converts an arviz trace to a dict of str -> np.ndarray
 
