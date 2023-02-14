@@ -99,6 +99,11 @@ def flat_results_to_dict(flat_data, advi_fit_result):
     return result
 
 
+def flatten_shared(shared_list):
+    # From https://github.com/pymc-devs/pymc/blob/main/pymc/variational/callbacks.py
+    return np.concatenate([sh.get_value().flatten() for sh in shared_list])
+
+
 def pymc_advi_history_callback(Approximation, losses, i, record_every=100):
     # A callback for PyMC3, recording the KL over time, estimated with n_draws.
     # logp_fn_dict_vmap must evaluate the log posterior, and must be vectorised,
@@ -118,10 +123,21 @@ def pymc_advi_history_callback(Approximation, losses, i, record_every=100):
     mean_dict = flat_results_to_dict(means, Approximation)
     sd_dict = flat_results_to_dict(sds, Approximation)
 
+    # Also store what's needed to compute the convergence criterion
+    flat_params = flatten_shared(Approximation.params)
+
     # TODO: Use these results to compute the ELBO
     # Slight problem is that I need to make sure the ordering agrees.
     pymc_advi_history_callback.kl_history.append(
-        (i, {"means": mean_dict, "sds": sd_dict, "time": cur_time})
+        (
+            i,
+            {
+                "means": mean_dict,
+                "sds": sd_dict,
+                "time": cur_time,
+                "flat_params": flat_params,
+            },
+        )
     )
 
 
