@@ -3,14 +3,15 @@ COVERAGE_TARGET_DIR='/media/martin/External Drive/projects/lrvb_paper/coverage_w
 
 for MODEL_NAME in microcredit occ_det tennis potus; do
 
-	# python fit_raabbvi.py "$MODEL_NAME" "$TARGET_DIR"
-	# python fit_dadvi.py "$MODEL_NAME" "$TARGET_DIR"
-	# python fit_pymc_sadvi.py "$MODEL_NAME" "$TARGET_DIR" advi
-	# python fit_pymc_sadvi.py "$MODEL_NAME" "$TARGET_DIR" fullrank_advi
-	# python fit_mcmc.py "$MODEL_NAME" "$TARGET_DIR"
+        echo "$MODEL_NAME"
 
+	python fit_raabbvi.py "$MODEL_NAME" "$TARGET_DIR"
+	python fit_dadvi.py "$MODEL_NAME" "$TARGET_DIR"
+	python fit_pymc_sadvi.py "$MODEL_NAME" "$TARGET_DIR" advi
+	python fit_pymc_sadvi.py "$MODEL_NAME" "$TARGET_DIR" fullrank_advi
+	python fit_mcmc.py "$MODEL_NAME" "$TARGET_DIR"
 	python fit_dadvi_lrvb.py "$MODEL_NAME" "$TARGET_DIR" Direct
-        python fit_dadvi_lrvb.py "$MODEL_NAME" "$TARGET_DIR" CG
+        # python fit_dadvi_lrvb.py "$MODEL_NAME" "$TARGET_DIR" CG
 
 	# python fit_doubling_dadvi_lrvb.py "$MODEL_NAME" "$TARGET_DIR" 0.25
 

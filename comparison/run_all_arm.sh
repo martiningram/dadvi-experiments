@@ -10,7 +10,7 @@ while read MODEL_NAME; do
     # python fit_raabbvi.py "$MODEL_NAME" "$TARGET_DIR"
     # python fit_dadvi.py "$MODEL_NAME" "$TARGET_DIR"
     # python fit_mcmc.py "$MODEL_NAME" "$TARGET_DIR"
-    python fit_dadvi_lrvb.py "$MODEL_NAME" "$TARGET_DIR" CG
+    # python fit_dadvi_lrvb.py "$MODEL_NAME" "$TARGET_DIR" CG
     python fit_dadvi_lrvb.py "$MODEL_NAME" "$TARGET_DIR" Direct
     # python fit_doubling_dadvi_lrvb.py "$MODEL_NAME" "$TARGET_DIR" 0.25
 
