@@ -81,6 +81,7 @@ if __name__ == "__main__":
                 "runtime": runtime,
                 "unconstrained_param_names": get_unconstrained_variable_names(model),
                 "kl_history": kl_estimates,
+                # TODO: Maybe compute the convergence criterion over time here
                 "flat_params_over_time": flat_params_over_time,
                 **get_run_datetime_and_hostname(),
             },
