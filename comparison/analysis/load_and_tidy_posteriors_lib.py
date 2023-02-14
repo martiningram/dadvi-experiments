@@ -80,8 +80,9 @@ def GetEvaluationCount(method, metadata):
         n_calls = 2 * M * evaluation_count['n_hvp_calls'] + \
                   M * evaluation_count['n_val_and_grad_calls']
     elif method == 'LRVB':
-        # Need to save the extra LRVB iterations in the metadata
-        n_calls = missing_value
+        # TODO(Martin): is this correct?
+        M = GetNumDraws(method, metadata)
+        n_calls = M * metadata['lrvb_hvp_calls']
     elif method == 'SADVI':
         n_calls = metadata['steps']
     elif method == 'SADVI_FR':
@@ -118,6 +119,7 @@ def CheckConvergence(method, metadata):
         # This is not nuanced but we seem to pass
         return metadata['newton_step_norm'] < 1e-4
     elif method == 'LRVB':
+        # Not defined
         return missing_value
     elif method == 'SADVI':
         return metadata['steps'] < 100000
