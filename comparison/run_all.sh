@@ -11,9 +11,7 @@ for MODEL_NAME in microcredit occ_det tennis potus; do
 	python fit_pymc_sadvi.py "$MODEL_NAME" "$TARGET_DIR" fullrank_advi
 	python fit_mcmc.py "$MODEL_NAME" "$TARGET_DIR"
 	python fit_dadvi_lrvb.py "$MODEL_NAME" "$TARGET_DIR" Direct
-        # python fit_dadvi_lrvb.py "$MODEL_NAME" "$TARGET_DIR" CG
-
-	# python fit_doubling_dadvi_lrvb.py "$MODEL_NAME" "$TARGET_DIR" 0.25
+	python fit_doubling_dadvi_lrvb.py "$MODEL_NAME" "$TARGET_DIR" 0.25
 
         # Run coverage
 	# for min_m_power in 3 4 5 6; do

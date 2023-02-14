@@ -60,6 +60,10 @@ if __name__ == "__main__":
     else:
         kl_estimates = None
 
+    flat_params_over_time = {
+        x[0]: x[1]["flat_params"] for x in pymc_advi_history_callback.kl_history
+    }
+
     base_dir = join(target_dir, f"s{method}_results")
 
     makedirs(join(base_dir, "draw_dicts"), exist_ok=True)
@@ -77,6 +81,8 @@ if __name__ == "__main__":
                 "runtime": runtime,
                 "unconstrained_param_names": get_unconstrained_variable_names(model),
                 "kl_history": kl_estimates,
+                # TODO: Maybe compute the convergence criterion over time here
+                "flat_params_over_time": flat_params_over_time,
                 **get_run_datetime_and_hostname(),
             },
             f,

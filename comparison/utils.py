@@ -17,6 +17,7 @@ import pymc as pm
 from jax.flatten_util import ravel_pytree
 from datetime import datetime
 import socket
+from time import time
 
 
 NON_ARM_MODELS = ["microcredit", "occ_det", "potus", "tennis"]
@@ -59,6 +60,25 @@ def estimate_kl_fresh_draws(dadvi_funs, var_params, n_draws=1000, seed=None):
     return dadvi_funs.kl_est_and_grad_fun(var_params, cur_z)[0]
 
 
+def estimate_kl_stderr_fresh_draws(dadvi_funs, var_params, n_draws=1000, seed=None):
+
+    n_params = len(var_params) // 2
+
+    if seed is not None:
+        np.random.seed(seed)
+
+    cur_z = np.random.randn(n_draws, n_params)
+
+    individual_results = [
+        dadvi_funs.kl_est_and_grad_fun(var_params, cur_z[[i]])[0]
+        for i in range(n_draws)
+    ]
+
+    stdev = np.std(individual_results)
+
+    return stdev / np.sqrt(n_draws)
+
+
 def arviz_to_draw_dict(az_trace):
     # Converts an arviz trace to a dict of str -> np.ndarray
 
@@ -79,6 +99,11 @@ def flat_results_to_dict(flat_data, advi_fit_result):
     return result
 
 
+def flatten_shared(shared_list):
+    # From https://github.com/pymc-devs/pymc/blob/main/pymc/variational/callbacks.py
+    return np.concatenate([sh.get_value().flatten() for sh in shared_list])
+
+
 def pymc_advi_history_callback(Approximation, losses, i, record_every=100):
     # A callback for PyMC3, recording the KL over time, estimated with n_draws.
     # logp_fn_dict_vmap must evaluate the log posterior, and must be vectorised,
@@ -93,14 +118,26 @@ def pymc_advi_history_callback(Approximation, losses, i, record_every=100):
 
     means = Approximation.mean.eval()
     sds = Approximation.std.eval()
+    cur_time = time()
 
     mean_dict = flat_results_to_dict(means, Approximation)
     sd_dict = flat_results_to_dict(sds, Approximation)
 
+    # Also store what's needed to compute the convergence criterion
+    flat_params = flatten_shared(Approximation.params)
+
     # TODO: Use these results to compute the ELBO
     # Slight problem is that I need to make sure the ordering agrees.
     pymc_advi_history_callback.kl_history.append(
-        (i, {"means": mean_dict, "sds": sd_dict})
+        (
+            i,
+            {
+                "means": mean_dict,
+                "sds": sd_dict,
+                "time": cur_time,
+                "flat_params": flat_params,
+            },
+        )
     )
 
 
