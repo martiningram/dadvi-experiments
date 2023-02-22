@@ -53,6 +53,7 @@ if __name__ == "__main__":
                 "kl_estimate": estimate_kl_pymc_advi(
                     cur_params["means"], cur_params["sds"], dadvi_funs, jax_funs, seed=2
                 ),
+                "time": cur_params["time"],
             }
             for i, cur_params in kl_hist
         ]
