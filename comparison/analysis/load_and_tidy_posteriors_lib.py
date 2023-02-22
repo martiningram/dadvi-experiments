@@ -9,8 +9,14 @@ VALID_METHODS = \
 
 
 def LoadPickleSafely(pickle_file):
-    with open(pickle_file, 'rb') as f:
-        return pickle.load(f)
+    try:
+        with open(pickle_file, 'rb') as f:
+            return pickle.load(f)
+    except FileNotFoundError:
+        print(f'{pickle_file} not found.')
+        return None
+    except Exception as e:
+        raise
 
 
 def RepList(x, n):
@@ -82,7 +88,7 @@ def GetEvaluationCount(method, metadata):
     elif method == 'LRVB':
         # TODO(Martin): is this correct?
         M = GetNumDraws(method, metadata)
-        n_calls = M * metadata['lrvb_hvp_calls']
+        n_calls = 2 * M * metadata['lrvb_hvp_calls']
     elif method == 'SADVI':
         n_calls = metadata['steps']
     elif method == 'SADVI_FR':
@@ -138,11 +144,29 @@ def GetNumDraws(method, metadata):
         num_draws = metadata['M']
     elif method == 'LRVB_Doubling':
         # Need to save all the steps in the metadata
-        num_draws = metadata['M']
+        return missing_value
+        # num_draws = metadata['M']
     else:
         # The number of draws is not meaningful for other methods
         num_draws = missing_value
     return num_draws
+
+
+
+def GetKLStdev(method, metadata):
+    missing_value = float('NaN')
+    if method == 'DADVI':
+        return metadata['kl_stderr_hist'][-1]
+    else:
+        # The number of draws is not meaningful for other methods
+        return missing_value
+
+
+def GetRuntime(method, metadata):
+    if method == 'LRVB':
+        return metadata['runtime_lrvb']
+    else:
+        return metadata['runtime']
 
 
 def GetMetadataDataframe(folder, method, return_raw_metadata=False):
@@ -161,18 +185,28 @@ def GetMetadataDataframe(folder, method, return_raw_metadata=False):
     metadata_filenames = [
         x.replace('draw_dicts', subdir).replace('.npz', '.pkl')
         for x in draw_filenames ]
-    raw_metadata = [ LoadPickleSafely(x) for x in metadata_filenames ]
+
+    raw_metadata = []
+    model_names_keep = []
+    ind = 0
+    for x in metadata_filenames:
+        metadata = LoadPickleSafely(x)
+        if metadata is not None:
+            raw_metadata.append(metadata)
+            model_names_keep.append(model_names[ind])
+        ind = ind + 1
 
     if return_raw_metadata:
-        return raw_metadata
+        return raw_metadata, model_names_keep
 
     metadata_df = pd.DataFrame({
         'method': RepList(method, len(raw_metadata)),
-        'model': model_names,
-        'runtime': [ m['runtime'] for m in raw_metadata ],
+        'model': model_names_keep,
+        'runtime': [ GetRuntime(method, m) for m in raw_metadata ],
         'converged': [ CheckConvergence(method, m) for m in raw_metadata ],
         'op_count': [ GetEvaluationCount(method, m) for m in raw_metadata ],
-        'num_draws': [ GetNumDraws(method, m) for m in raw_metadata ]
+        'num_draws': [ GetNumDraws(method, m) for m in raw_metadata ],
+        'kl_sd': [ GetKLStdev(method, m) for m in raw_metadata ]
         } )
 
     return metadata_df
@@ -183,49 +217,61 @@ def GetMetadataDataframe(folder, method, return_raw_metadata=False):
 
 def GetObjectiveTraces(method, metadata):
     missing_value = [ float('NaN') ]
+
+    obj_hist = missing_value
+    step_hist = missing_value
+    obj_sd_hist = missing_value
+
     if method == 'NUTS':
         # Doesn't make sense for NUTS
-        obj_hist = missing_value
-        step_hist = missing_value
+        pass
     elif method == 'RAABBVI':
         obj_hist = np.array(metadata['kl_hist'])
         # Change the zero-indexed steps to one-indexed steps
         step_hist = np.array(metadata['kl_hist_i']) + 1
     elif method == 'DADVI':
         obj_hist = np.array(metadata['kl_hist'])
+        obj_sd_hist = np.array(metadata['kl_stderr_hist'])
         opt_sequence = metadata['opt_sequence']
-        step_hist = np.array([ o['val_and_grad_calls'] +
-                               o['hvp_calls'] for o in opt_sequence ])
+        num_draws = GetNumDraws(method, metadata)
+        # See GetEvaluationCount
+        step_hist = np.array([
+            num_draws *  o['val_and_grad_calls'] +
+            2 * num_draws * o['hvp_calls']
+            for o in opt_sequence ])
         if len(step_hist) != len(obj_hist):
             raise ValueError(
-                f'Different lengths for histories: '+
+                f'Different lengths for step and obj histories: '+
                 f'{len(step_hist)} != {len(obj_hist)}')
+        if len(step_hist) != len(obj_sd_hist):
+            raise ValueError(
+                f'Different lengths for setp and sd histories: '+
+                f'{len(step_hist)} != {len(obj_sd_hist)}')
     elif method == 'LRVB':
         # Doesn't make sense for LRVB
-        obj_hist = missing_value
-        step_hist = missing_value
+        pass
     elif method == 'SADVI':
         # TODO: Save KL traces for SADVI
         obj_hist = metadata['kl_history']['kl_estimate'].to_numpy()
         step_hist = metadata['kl_history']['step'].to_numpy()
     elif method == 'SADVI_FR':
         # This is still missing, but it's not comparable anyway
-        obj_hist = missing_value
-        step_hist = missing_value
+        pass
     elif method == 'LRVB_Doubling':
         # TODO: compile the full results
-        obj_hist = missing_value
-        step_hist = missing_value
+        pass
     else:
         print(f'Invalid method {method}\n')
         assert(False)
 
-    return step_hist, obj_hist
+    return step_hist, obj_hist, obj_sd_hist
 
 
 def GetTraceDataframe(folder, method):
     draw_filenames, model_names = GetDrawFilenames(folder)
-    raw_metadata = GetMetadataDataframe(folder, method, return_raw_metadata=True)
+    # If a model is missing, then we drop it from raw_metadata.
+    raw_metadata, model_names = \
+        GetMetadataDataframe(folder, method, return_raw_metadata=True)
     traces = [ GetObjectiveTraces(method, m) for m in raw_metadata ]
 
     trace_dict = {
@@ -237,7 +283,7 @@ def GetTraceDataframe(folder, method):
     assert(len(traces) == len(model_names))
     for model_ind in range(len(traces)):
         model = model_names[model_ind]
-        step_hist, obj_hist = traces[model_ind]
+        step_hist, obj_hist, _ = traces[model_ind]
         assert(len(step_hist) == len(obj_hist))
         num_rows = len(step_hist)
         trace_dict['model'].append(RepList(model, num_rows))
@@ -257,8 +303,10 @@ def GetTraceDataframe(folder, method):
 
 def GetUnconstraintedParamsDataframe(folder, method):
     draw_filenames, model_names = GetDrawFilenames(folder)
-    raw_metadata = GetMetadataDataframe(folder, method, return_raw_metadata=True)
-    unconstrained_params = [ m['unconstrained_param_names'] for m in raw_metadata ]
+    raw_metadata, model_names = \
+        GetMetadataDataframe(folder, method, return_raw_metadata=True)
+    unconstrained_params = \
+        [ m['unconstrained_param_names'] for m in raw_metadata ]
 
     param_dict = {
         'model': [],

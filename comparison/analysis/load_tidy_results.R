@@ -41,11 +41,22 @@ mcmc_diagnostics_df <- read.csv(file.path(input_folder, "mcmc_diagnostics_tidy.c
 num_methods <- length(unique(raw_posteriors_df$method))
 
 stopifnot(length(unique(raw_param_df$method)) == 1)
-model_dims <-
-    raw_param_df %>%
-    group_by(model, method) %>%
-    summarize(dim=n(), .groups="drop") %>%
-    select(-method)
+# model_dims <-
+#     raw_param_df %>%
+#     group_by(model, method) %>%
+#     summarize(dim=n(), .groups="drop") %>%
+#     select(-method)
+
+model_dims <- 
+    raw_posteriors_df %>%
+    filter(method == "DADVI") %>%
+    group_by(model, param, method) %>%
+    summarize(dims=n(), .groups="drop") %>%
+    inner_join(raw_param_df %>% rename(param=unconstrained_params),
+               by=c("model", "method", "param")) %>%
+    group_by(model) %>%
+    summarize(dim=sum(dims))
+
 
 
 metadata_df <-
@@ -226,8 +237,17 @@ if (FALSE) {
 metadata_df %>%
     filter(method == "LRVB") %>%
     select(model, method, op_count, dim, num_draws) %>%
-    mutate(ops_per_dim = op_count / (dim * num_draws))
+    mutate(ops_per_dim_per_draw = op_count / (dim * num_draws)) %>%
+    arrange(desc(ops_per_dim_per_draw))
 
+runtimes_df <-
+    metadata_df %>%
+    select(method, model, runtime) %>%
+    pivot_wider(id_cols=model, names_from=method, values_from=runtime) %>%
+    mutate(LRVB_minus_DADVI=LRVB-DADVI) %>%
+    arrange(LRVB_minus_DADVI)
+
+mean(runtimes_df$LRVB_minus_DADVI < 0, na.rm=TRUE)
 
 # Compare the time to termination (if not convergence)
 runtime_comp_df <-
