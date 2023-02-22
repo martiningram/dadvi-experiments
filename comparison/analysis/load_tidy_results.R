@@ -16,7 +16,7 @@ repeated_models <- c(
 # These models didn't work with NUTS well enough to use here.
 mcmc_bad_models <- c("earnings_latin_square", "earnings_vary_si", "election88_full")
 
-models_to_remove <- c(bad_models, repeated_models, mcmc_bad_models)
+models_to_remove <- c(bad_models, repeated_models, mcmc_bad_models) %>% unique()
 
 # This function is more convenient than always grouping and merging on is_arm
 IsARM <- function(model) { !(model %in% non_arm_models) }
@@ -41,11 +41,6 @@ mcmc_diagnostics_df <- read.csv(file.path(input_folder, "mcmc_diagnostics_tidy.c
 num_methods <- length(unique(raw_posteriors_df$method))
 
 stopifnot(length(unique(raw_param_df$method)) == 1)
-# model_dims <-
-#     raw_param_df %>%
-#     group_by(model, method) %>%
-#     summarize(dim=n(), .groups="drop") %>%
-#     select(-method)
 
 model_dims <- 
     raw_posteriors_df %>%
@@ -56,7 +51,7 @@ model_dims <-
                by=c("model", "method", "param")) %>%
     group_by(model) %>%
     summarize(dim=sum(dims))
-
+save_list[["model_dims"]] <- model_dims
 
 
 metadata_df <-
@@ -172,22 +167,6 @@ metadata_df %>%
     group_by(method, num_draws) %>%
     summarize(n=n())
 
-# metadata_df %>%
-#     filter(method %in% c("DADVI", "LRVB", "LRVB_Doubling")) %>%
-#     arrange(model, method, num_draws) %>%
-#     select(model, method, num_draws)
-
-
-
-########################################
-# Save parameter dimensions
-
-param_dims <-
-    filter(posteriors_df, method == "DADVI") %>%
-    group_by(model, is_arm) %>%
-    summarize(param_dim=n(), .groups="drop")
-save_list[["param_dims"]] <- param_dims
-
 
 
 ########################################
@@ -197,9 +176,20 @@ save_list[["param_dims"]] <- param_dims
 param_df <-
     posteriors_df %>%
     filter(method == "DADVI") %>%
-    group_by(model, is_arm, param) %>%
-    summarize(dimension=n(), .groups="drop") %>%
-    arrange(model, dimension)
+    left_join(raw_param_df %>% 
+                  rename(param=unconstrained_params) %>% 
+                  mutate(status="unconstrainted") %>%
+                  select(model, param, status), 
+              by=c("model", "param")) %>%
+    mutate(is_unconstrained=!is.na(status)) %>%
+    select(model, param, is_unconstrained, ind)
+
+View(param_df)
+# 
+# %>%
+#     group_by(model, is_arm, param) %>%
+#     summarize(dimension=n(), .groups="drop") %>%
+#     arrange(model, dimension)
 
 # Don't report "raw" parameters
 param_df <- 

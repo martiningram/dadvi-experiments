@@ -327,3 +327,40 @@ def GetUnconstraintedParamsDataframe(folder, method):
     param_df['method'] = method
 
     return param_df
+
+
+
+# Save MCMC diagnostics
+
+def GetMCMCDiagnosticsDataframe(folder, method):
+    assert method == 'NUTS'
+
+    draw_filenames, model_names = GetDrawFilenames(folder)
+    raw_metadata, model_names = \
+        GetMetadataDataframe(folder, method, return_raw_metadata=True)
+
+    mcmc_dict = {
+        'model': [],
+        'param': [],
+        'ess': [],
+        'rhat': []
+    }
+
+    for model_ind in range(len(raw_metadata)):
+        model = model_names[model_ind]
+        metadata = raw_metadata[model_ind]
+
+        for varname in metadata['ess'].data_vars:
+            ess = metadata['ess'][varname].values.flatten()
+            rhat = metadata['rhat'][varname].values.flatten()
+            assert(len(ess) == len(rhat))
+            mcmc_dict['model'].append(RepList(model, len(ess)))
+            mcmc_dict['param'].append(RepList(varname, len(ess)))
+            mcmc_dict['ess'].append(ess)
+            mcmc_dict['rhat'].append(rhat)
+
+    mcmc_df = pd.DataFrame()
+    for k,v in mcmc_dict.items():
+        mcmc_df[k] = np.hstack(v)
+
+    return mcmc_df
