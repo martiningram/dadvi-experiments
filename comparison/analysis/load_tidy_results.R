@@ -172,31 +172,9 @@ metadata_df %>%
 ########################################
 # Inspect and categorize the parameters
 
-# See the parameter dimensions and filter reporting
-param_df <-
-    posteriors_df %>%
-    filter(method == "DADVI") %>%
-    left_join(raw_param_df %>% 
-                  rename(param=unconstrained_params) %>% 
-                  mutate(status="unconstrainted") %>%
-                  select(model, param, status), 
-              by=c("model", "param")) %>%
-    mutate(is_unconstrained=!is.na(status)) %>%
-    select(model, param, is_unconstrained, ind)
-
-View(param_df)
-# 
-# %>%
-#     group_by(model, is_arm, param) %>%
-#     summarize(dimension=n(), .groups="drop") %>%
-#     arrange(model, dimension)
-
-# Don't report "raw" parameters
-param_df <- 
-    param_df %>%
-    mutate(report_param=case_when(
-        !is_arm & grepl("raw", param) ~ FALSE,
-        TRUE ~ TRUE))
+# See the parameter dimensions and filter reporting. 
+# We will use this dataframe later to select which parameters
+# get reported in the output.
 
 # Manually label random effects for non-ARM models.  Potus is a bit arbitrary
 # Some ARM random effect scale parameters have a | but they all have dimension 1.
@@ -210,7 +188,23 @@ IsRE <- function(model, is_arm, param, dimension) {
         TRUE ~ FALSE
     )
 }
-param_df <- mutate(param_df, is_re=IsRE(model, is_arm, param, dimension))
+
+param_df <-
+    posteriors_df %>%
+    filter(method == "DADVI") %>%
+    left_join(raw_param_df %>% 
+                  rename(param=unconstrained_params) %>% 
+                  mutate(status="unconstrainted") %>%
+                  select(model, param, status), 
+              by=c("model", "param")) %>%
+    mutate(is_unconstrained=!is.na(status)) %>%
+    select(model, is_arm, param, is_unconstrained, -status) %>%
+    group_by(model, is_arm, param, is_unconstrained) %>%
+    summarize(dimension=n(), .groups="drop") %>%
+    mutate(report_param=case_when(
+        !is_arm & grepl("raw", param) ~ FALSE,
+        TRUE ~ TRUE)) %>%
+    mutate(is_re=IsRE(model, is_arm, param, dimension))
 
 if (FALSE) {
     # Manual check
@@ -219,41 +213,20 @@ if (FALSE) {
 }
 
 
+
+#######################################################
+#######################################################
+#######################################################
 #######################################################
 # Compare final runtimes (not the optimization traces)
 
 
-# LRVB should have one HVP per parameter, but it's not.
-metadata_df %>%
-    filter(method == "LRVB") %>%
-    select(model, method, op_count, dim, num_draws) %>%
-    mutate(ops_per_dim_per_draw = op_count / (dim * num_draws)) %>%
-    arrange(desc(ops_per_dim_per_draw))
-
-runtimes_df <-
-    metadata_df %>%
-    select(method, model, runtime) %>%
-    pivot_wider(id_cols=model, names_from=method, values_from=runtime) %>%
-    mutate(LRVB_minus_DADVI=LRVB-DADVI) %>%
-    arrange(LRVB_minus_DADVI)
-
-mean(runtimes_df$LRVB_minus_DADVI < 0, na.rm=TRUE)
-
-# Compare the time to termination (if not convergence)
-runtime_comp_df <-
-    inner_join(filter(metadata_df, method != "DADVI") %>% 
-                   select(method, model, runtime, op_count, time_per_op, converged),
-               filter(metadata_df, method == "DADVI") %>% 
-                   select(method, model, runtime, op_count, time_per_op, converged),
-               by=c("model"), suffix=c("", "_dadvi")) %>%
-    mutate(runtime_vs_dadvi=runtime / runtime_dadvi,
-           op_count_vs_dadvi=op_count / op_count_dadvi,
-           is_arm=IsARM(model))
-
 
 if (FALSE) {
-    filter(metadata_df, method == "LRVB") %>% View()
-
+    # Sanity check: look at the average runtime per operation.
+    # If runtime is dominated by model evaluation, as we expect it
+    # to be, this should not vary radically by method.
+    
     metadata_df %>%
         filter(method %in% c("DADVI", "RAABBVI", "SADVI", "SADVI_FR", "LRVB"),
                is_arm) %>%
@@ -270,45 +243,98 @@ if (FALSE) {
         arrange(model,  method)
 }
 
+
+
+# LRVB should have one HVP per parameter, but it's not.  I think this 
+# is due to not correctly counting the dimension of the unconstrained parameters.
+metadata_df %>%
+    filter(method == "LRVB") %>%
+    select(model, method, op_count, dim, num_draws) %>%
+    mutate(ops_per_dim_per_draw = op_count / (dim * num_draws)) %>%
+    arrange(desc(ops_per_dim_per_draw))
+
+# Compare to reference methods: DADVI and DADVI + LRVB
+
+dadvi_runtimes_df <-
+    metadata_df %>%
+    select(method, model, runtime, op_count) %>%
+    filter(method == "DADVI")
+
+lrvb_runtimes_df <-
+    metadata_df %>%
+    select(method, model, runtime, op_count) %>%
+    filter(method == "LRVB") %>%
+    inner_join(dadvi_runtimes_df, suffix=c("", "_DADVI"), by=c("model")) %>%
+    mutate(runtime=runtime + runtime_DADVI,
+           op_count=op_count + op_count_DADVI) %>%
+    select(-runtime_DADVI, -op_count_DADVI)
+
+    # select(method, model, runtime) %>%
+    # mutate(LRVB_plus_DADVI=LRVB + DADVI) %>%
+    # arrange(LRVB_minus_DADVI)
+
+
+# Compare the time to termination (if not convergence)
+# NUTS op count isn't counted correctly
+runtime_comp_df <-
+    filter(metadata_df, method != "DADVI") %>% 
+    select(method, model, runtime, op_count, time_per_op, converged) %>%
+    inner_join(dadvi_runtimes_df, by=c("model"), suffix=c("", "_dadvi")) %>%
+    mutate(runtime=case_when(method == "LRVB" ~ runtime + runtime_dadvi,
+                             TRUE ~ runtime),
+           op_count=case_when(method == "LRVB" ~ op_count + op_count_dadvi,
+                              method == "NUTS" ~ as.numeric(NA),
+                              TRUE ~ op_count)) %>%
+    inner_join(lrvb_runtimes_df, by=c("model"), suffix=c("", "_lrvb")) %>%
+    mutate(runtime_vs_dadvi=runtime / runtime_dadvi,
+           op_count_vs_dadvi=op_count / op_count_dadvi,
+           runtime_vs_lrvb=runtime / runtime_lrvb,
+           op_count_vs_lrvb=op_count / op_count_lrvb,
+           is_arm=IsARM(model))
+
 head(runtime_comp_df)
 runtime_comp_df$method %>% unique()
 
 if (FALSE) {
-    comp_methods <- c("NUTS", "RAABBVI", "SADVI", "SADVI_FR", "LRVB")
-    runtime_plot <-
-        runtime_comp_df %>%
-        filter(method %in% comp_methods, is_arm) %>%
-        ggplot() + 
-        geom_histogram(aes(x=runtime_vs_dadvi, fill=method)) +
-        facet_grid(method ~ .) +
-        scale_x_log10() +
-        xlab("Runtime / DADVI runtime") +
-        expand_limits(x=1)
+    # Compare computational effort to a DADVI baseline
+    ComputationComparisonHistogramGraph <- function(comp_df, col) {
+        plt <- ggplot(comp_df) + 
+            geom_histogram(aes(x={{col}}, fill=method), bins=30) +
+            facet_grid(method ~ .) +
+            geom_vline(aes(xintercept=1)) +
+            scale_x_log10() +
+            expand_limits(x=1)
+        return(plt)
+    }
     
-    op_plot <-
-        runtime_comp_df %>%
-        filter(method %in% comp_methods, is_arm) %>%
-        ggplot() + 
-        geom_histogram(aes(x=op_count_vs_dadvi, fill=method)) +
-        facet_grid(method ~ .) +
-        scale_x_log10() +
-        xlab("Model evaluations / DADVI model evluations") +
-        expand_limits(x=1)
-    grid.arrange(runtime_plot, op_plot, ncol=2)
+    comp_methods <- c("NUTS", "RAABBVI", "SADVI", "SADVI_FR")
+    runtime_arm_df <-runtime_comp_df %>%
+        filter(method %in% comp_methods, is_arm) 
+
+    runtime_dadvi_plot <-
+        ComputationComparisonHistogramGraph(runtime_arm_df, runtime_vs_dadvi) +
+        xlab("Runtime / DADVI runtime")
+        
+    op_dadvi_plot <-
+        ComputationComparisonHistogramGraph(runtime_arm_df, op_count_vs_dadvi) +
+        xlab("Model evaluations / DADVI model evaluations") 
     
+    runtime_lrvb_plot <-
+        ComputationComparisonHistogramGraph(runtime_arm_df, runtime_vs_lrvb) +
+        xlab("Runtime / LRVB runtime")
     
-    ggplot(runtime_comp_df %>% filter(is_arm)) +
-        geom_point(aes(x=op_count, y=runtime, color=method)) +
-        scale_x_log10() + scale_y_log10()
-}
+    op_lrvb_plot <-
+        ComputationComparisonHistogramGraph(runtime_arm_df, op_count_vs_lrvb) +
+        xlab("Model evaluations / LRVB model evaluations") 
+    
+    grid.arrange(runtime_dadvi_plot, op_dadvi_plot, runtime_lrvb_plot, op_lrvb_plot, ncol=2)
 
-runtime_comp_df %>%
-    filter(method %in% c("NUTS", "RAABBVI", "SADVI"), !is_arm) %>%
-    select(model, method, runtime, runtime_dadvi, runtime_vs_dadvi) %>%
-    arrange(model, method)
+    # Look at the big models using a different visualization
+    runtime_comp_df %>%
+        filter(method %in% c("NUTS", "RAABBVI", "SADVI", "LRVB"), !is_arm) %>%
+        select(model, method, runtime, runtime_dadvi, runtime_vs_dadvi, runtime_lrvb, runtime_vs_lrvb) %>%
+        arrange(model, method)
 
-
-if (FALSE) {
     ComputationComparisonGraph <- function(comp_df, col) {
         plt <- ggplot(comp_df) +
             geom_bar(aes(x=method, group=model, fill=method,
@@ -318,14 +344,21 @@ if (FALSE) {
             facet_grid( ~ model)
         return(plt)
     }
+    comp_methods <- c("NUTS", "RAABBVI", "SADVI", "LRVB")
     grid.arrange(
         runtime_comp_df %>%
-            filter(method %in% c("RAABBVI", "SADVI", "SADVI_FR"), !is_arm) %>%
+            filter(method %in% comp_methods, !is_arm) %>%
             ComputationComparisonGraph(runtime_vs_dadvi),
         runtime_comp_df %>%
-            filter(method %in% c("RAABBVI", "SADVI", "SADVI_FR"), !is_arm) %>%
+            filter(method %in% comp_methods, !is_arm) %>%
             ComputationComparisonGraph(op_count_vs_dadvi),
-        ncol=1
+        runtime_comp_df %>%
+            filter(method %in% comp_methods, !is_arm) %>%
+            ComputationComparisonGraph(runtime_vs_lrvb),
+        runtime_comp_df %>%
+            filter(method %in% comp_methods, !is_arm) %>%
+            ComputationComparisonGraph(op_count_vs_lrvb),
+        ncol=2
     )
 }
 
@@ -355,52 +388,57 @@ save_list[["trace_df"]] <- trace_df
 
 # DADVI doesn't start counting at one :(
 trace_df %>%
-    group_by(model, method) %>%
+    group_by(method) %>%
     summarize(min_n_calls=min(n_calls))
 
 
+# This was the old way:
 # Get a "scale" by looking at the sd of the final 5% (or 100) SADVI iterates
+# trace_scales_df <-
+#     trace_df %>%
+#     filter(method == "SADVI") %>%
+#     group_by(model) %>%
+#     mutate(max_n_calls=max(n_calls)) %>%
+#     mutate(n_calls_prop=n_calls / max_n_calls) %>%
+#     filter((n_calls_prop > 0.95) | (max(n_calls) - n_calls < 100)) %>%
+#     summarise(n=n(), obj_value_sd=sd(obj_value)) %>%
+#     select(model, obj_value_sd)
 trace_scales_df <-
-    trace_df %>%
-    filter(method == "SADVI") %>%
-    group_by(model) %>%
-    mutate(max_n_calls=max(n_calls)) %>%
-    mutate(n_calls_prop=n_calls / max_n_calls) %>%
-    filter((n_calls_prop > 0.95) | (max(n_calls) - n_calls < 100)) %>%
-    summarise(n=n(), obj_value_sd=sd(obj_value)) %>%
-    select(model, obj_value_sd)
+    filter(metadata_df, method == "DADVI") %>%
+    select(model, kl_sd) %>%
+    rename(obj_value_sd=kl_sd)
 
-if (FALSE) {
-    # Sanity check our "scales"
-    trace_models <- unique(trace_df$model)
-    ui <- fluidPage(
-        numericInput("model_index", "Model index", 1, min=1, max=length(trace_models), step=1),
-        plotOutput("plot")
-    )
-    
-    server <- function(input, output, session) {
-        selected_model <- reactive({
-            trace_models[input$model_index]
-        })
-        dataset <- reactive({
-            trace_df %>% 
-                filter(model == selected_model()) %>%
-                filter(method == "SADVI") %>%
-                group_by(model) %>%
-                mutate(max_n_calls=max(n_calls)) %>%
-                mutate(n_calls_prop=n_calls / max_n_calls) %>%
-                filter((n_calls_prop > 0.95) | (max(n_calls) - n_calls < 100)) %>%
-                mutate(obj_value_z=(obj_value - mean(obj_value)) / sd(obj_value))
-        })
-        output$plot <- renderPlot({
-            ggplot(dataset()) +
-                geom_line(aes(x=n_calls_prop, y=obj_value_z, group=model)) +
-                ggtitle(selected_model())
-        }, res = 96)
-    }
-    
-    shinyApp(ui, server)
-}
+# if (FALSE) {
+#     # Sanity check our "scales"
+#     trace_models <- unique(trace_df$model)
+#     ui <- fluidPage(
+#         numericInput("model_index", "Model index", 1, min=1, max=length(trace_models), step=1),
+#         plotOutput("plot")
+#     )
+#     
+#     server <- function(input, output, session) {
+#         selected_model <- reactive({
+#             trace_models[input$model_index]
+#         })
+#         dataset <- reactive({
+#             trace_df %>% 
+#                 filter(model == selected_model()) %>%
+#                 filter(method == "SADVI") %>%
+#                 group_by(model) %>%
+#                 mutate(max_n_calls=max(n_calls)) %>%
+#                 mutate(n_calls_prop=n_calls / max_n_calls) %>%
+#                 filter((n_calls_prop > 0.95) | (max(n_calls) - n_calls < 100)) %>%
+#                 mutate(obj_value_z=(obj_value - mean(obj_value)) / sd(obj_value))
+#         })
+#         output$plot <- renderPlot({
+#             ggplot(dataset()) +
+#                 geom_line(aes(x=n_calls_prop, y=obj_value_z, group=model)) +
+#                 ggtitle(selected_model())
+#         }, res = 96)
+#     }
+#     
+#     shinyApp(ui, server)
+# }
 
 # Get a "location" by looking at termination of the DADVI algorithm
 trace_offset_df <-
@@ -488,9 +526,10 @@ if (FALSE) {
             scale_x_continuous(trans=RightLog10Transform) +
             #scale_x_log10() +
             geom_hline(aes(yintercept=0)) +
+            #geom_hline(aes(yintercept=-2), color="dark gray") + # Two DADVI KL standard deviations
             geom_vline(aes(xintercept=1)) +
             xlab("Number of function calls / number of DADVI function calls\n(Values > 1 are log10 transformed)") +
-            ylab("(ELBO - DADVI optimal ELBO) / SADVI optimal ELBO standard deviation \n(signed log10 transformed)")
+            ylab("(ELBO - DADVI optimal ELBO) / DADVI optimal ELBO standard deviation \n(signed log10 transformed)")
     }
     
     PlotTraces(trace_norm_df %>% filter(is_arm)) +
@@ -536,80 +575,6 @@ if (FALSE) {
     shinyApp(ui, server)
 }
 
-
-
-
-# Look at the objective value at termination.  I'm not sure this adds
-# much to the trace visualization above.
-
-final_trace_df <-
-    trace_df %>%
-    group_by(model, method) %>%
-    filter(n_calls == max(n_calls))
-
-trace_normed_df <- 
-    inner_join(trace_df,
-               final_trace_df %>% filter(method=="DADVI"),
-               by=c("model", "is_arm"), suffix=c("", "_final")) %>%
-        mutate(obj_value_norm=obj_value / obj_value_final,
-               n_calls_norm=n_calls / n_calls_final)
-
-if (FALSE) {
-    # Ugh
-    
-    ggplot() +
-        geom_line(aes(x=n_calls_norm, y=obj_value_norm - 1, color=method, group=paste(method, model)), 
-                  data=filter(trace_normed_df, method == "RAABBVI")) +
-        geom_line(aes(x=n_calls_norm, y=obj_value_norm - 1, color=method, group=paste(method, model)), 
-                  data=filter(trace_normed_df, method == "DADVI")) +
-        scale_y_continuous(trans=
-                               scales::trans_new(
-                                   "signed_log10",
-                                   function(x) { sign(x) * log10(abs(x)) },
-                                   function(x) { sign(x) * exp(abs(x)) })) +
-        #scale_x_log10() +
-        ylim(-1e3, 1e3) +
-        xlim(0, 5) +
-        geom_hline(aes(yintercept=0))
-
-    
-    ggplot() +
-        geom_line(aes(x=n_calls_norm, y=obj_value_norm - 1, color=method, group=paste(method, model)), 
-                  data=filter(trace_normed_df, method == "RAABBVI")) +
-        geom_line(aes(x=n_calls_norm, y=obj_value_norm - 1, color=method, group=paste(method, model)), 
-                  data=filter(trace_normed_df, method == "DADVI")) +
-        scale_y_continuous(trans="atanh") +
-        scale_x_log10()
-
-    
-    
-    
-    
-    ggplot(trace_normed_df) +
-        geom_line(aes(x=n_calls_norm + 1e-3, y=obj_value_norm - 1, color=method, group=paste(method, model))) +
-        scale_y_continuous(trans="atanh") +
-        scale_x_log10() +
-        facet_grid(method ~ .)
-    
-}
-
-
-final_trace_comp_df <-
-    inner_join(filter(final_trace_df, method != "DADVI"),
-               filter(final_trace_df, method == "DADVI"),
-               by=c("model", "is_arm"), suffix=c("", "_dadvi")) %>%
-    mutate(n_calls_vs_dadvi=n_calls / n_calls_dadvi,
-           obj_value_vs_dadvi=obj_value - obj_value_dadvi)
-save_list[["final_trace_comp_df"]] <- final_trace_comp_df
-
-if (FALSE) {
-    View(final_trace_comp_df %>% filter(!is_arm))
-
-    ggplot(final_trace_comp_df) +
-        geom_point(aes(x=n_calls_vs_dadvi, y=obj_value_vs_dadvi, color=method)) +
-        facet_grid(~ method) +
-        scale_x_log10()
-}
 
 
 ########################################
