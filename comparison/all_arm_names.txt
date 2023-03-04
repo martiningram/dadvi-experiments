@@ -1,5 +1,3 @@
-test
-test_rstanarm
 kidscore_momhs
 kidscore_momiq
 kidiq_multi_preds
@@ -61,3 +59,5 @@ electric
 electric_1a
 electric_1b
 electric_1c
+test
+test_rstanarm

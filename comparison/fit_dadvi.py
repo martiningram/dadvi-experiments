@@ -4,10 +4,15 @@ config.update("jax_enable_x64", True)
 # Fit using DADVI. This is the verbose version; we'll want a higher-level API down the road.
 # It's not hard to write one, but hopefully this makes sense to you.
 import sys
-from utils import load_model_by_name, estimate_kl_fresh_draws
+from utils import (
+    load_model_by_name,
+    estimate_kl_fresh_draws,
+    estimate_kl_stderr_fresh_draws,
+)
 from dadvi.core import find_dadvi_optimum
 from dadvi.jax import build_dadvi_funs
 from dadvi.pymc.pymc_to_jax import get_jax_functions_from_pymc
+from dadvi.pymc.utils import get_unconstrained_variable_names
 import numpy as np
 import time
 from dadvi.utils import opt_callback_fun
@@ -16,6 +21,7 @@ from dadvi.pymc.pymc_to_jax import transform_dadvi_draws
 from os import makedirs
 from os.path import join
 import pickle
+from utils import get_run_datetime_and_hostname
 
 
 model_name = sys.argv[1]
@@ -68,7 +74,12 @@ makedirs(join(target_dir, "dadvi_info"), exist_ok=True)
 np.savez(join(target_dir, "draw_dicts", model_name + ".npz"), **dadvi_dict)
 
 kl_hist_dadvi = [
-    estimate_kl_fresh_draws(dadvi_funs, cur_hist["theta"])
+    estimate_kl_fresh_draws(dadvi_funs, cur_hist["theta"], seed=2)
+    for cur_hist in dadvi_opt_sequence
+]
+
+kl_sd_dadvi = [
+    estimate_kl_stderr_fresh_draws(dadvi_funs, cur_hist["theta"], seed=2)
     for cur_hist in dadvi_opt_sequence
 ]
 
@@ -79,9 +90,13 @@ with open(join(target_dir, "dadvi_info", model_name + ".pkl"), "wb") as f:
             "fixed_draws": zs,
             "M": zs.shape[0],
             "kl_hist": kl_hist_dadvi,
+            "kl_stderr_hist": kl_sd_dadvi,
             "opt_sequence": dadvi_opt_sequence,
             "runtime": runtime_dadvi,
             "newton_step_norm": opt["newton_step_norm"],
+            "newton_step": opt["newton_step"],
+            "unconstrained_param_names": get_unconstrained_variable_names(m),
+            **get_run_datetime_and_hostname(),
         },
         f,
     )
