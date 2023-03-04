@@ -1,18 +1,18 @@
-TARGET_DIR='/media/martin/External Drive/projects/lrvb_paper/dadvi_runs_january_2023'
+TARGET_DIR='/media/martin/External Drive/projects/lrvb_paper/dadvi_runs_february_2023_3'
 COVERAGE_TARGET_DIR='/media/martin/External Drive/projects/lrvb_paper/coverage_warm_starts_rerun'
 
 while read MODEL_NAME; do
     echo "$MODEL_NAME"
 
     # Run inference
-    # python fit_pymc_sadvi.py "$MODEL_NAME" "$TARGET_DIR" advi
-    # python fit_pymc_sadvi.py "$MODEL_NAME" "$TARGET_DIR" fullrank_advi
-    # python fit_raabbvi.py "$MODEL_NAME" "$TARGET_DIR"
-    # python fit_dadvi.py "$MODEL_NAME" "$TARGET_DIR"
-    # python fit_mcmc.py "$MODEL_NAME" "$TARGET_DIR"
-    python fit_dadvi_lrvb.py "$MODEL_NAME" "$TARGET_DIR" CG
+    python fit_doubling_dadvi_lrvb.py "$MODEL_NAME" "$TARGET_DIR" 0.25
+    python fit_raabbvi.py "$MODEL_NAME" "$TARGET_DIR"
+    python fit_dadvi.py "$MODEL_NAME" "$TARGET_DIR"
+    python fit_mcmc.py "$MODEL_NAME" "$TARGET_DIR"
     python fit_dadvi_lrvb.py "$MODEL_NAME" "$TARGET_DIR" Direct
-    # python fit_doubling_dadvi_lrvb.py "$MODEL_NAME" "$TARGET_DIR" 0.25
+
+    python fit_pymc_sadvi.py "$MODEL_NAME" "$TARGET_DIR" advi
+    python fit_pymc_sadvi.py "$MODEL_NAME" "$TARGET_DIR" fullrank_advi
 
     # Run coverage
     # for min_m_power in 3 4 5 6; do
