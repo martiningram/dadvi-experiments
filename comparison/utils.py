@@ -35,7 +35,7 @@ def load_model_by_name(model_name):
         model = get_potus_model(POTUS_JSON_PATH)
 
     elif model_name == "tennis":
-        model = fetch_tennis_model(1969, sackmann_dir=SACKMANN_DIR)
+        model = fetch_tennis_model(1969, sackmann_dir=SACKMANN_DIR)['model']
 
     else:
         df = pd.read_csv(ARM_CONFIG_CSV_PATH)

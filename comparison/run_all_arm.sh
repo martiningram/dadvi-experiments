@@ -1,4 +1,4 @@
-TARGET_DIR='/media/martin/External Drive/projects/lrvb_paper/dadvi_runs_february_2023_3'
+TARGET_DIR='/home/martin.ingram/experiment_runs/march_2023'
 COVERAGE_TARGET_DIR='/media/martin/External Drive/projects/lrvb_paper/coverage_warm_starts_rerun'
 
 while read MODEL_NAME; do
@@ -6,7 +6,7 @@ while read MODEL_NAME; do
 
     # Run inference
     python fit_doubling_dadvi_lrvb.py "$MODEL_NAME" "$TARGET_DIR" 0.25
-    python fit_raabbvi.py "$MODEL_NAME" "$TARGET_DIR"
+    # python fit_raabbvi.py "$MODEL_NAME" "$TARGET_DIR"
     python fit_dadvi.py "$MODEL_NAME" "$TARGET_DIR"
     python fit_mcmc.py "$MODEL_NAME" "$TARGET_DIR"
     python fit_dadvi_lrvb.py "$MODEL_NAME" "$TARGET_DIR" Direct
