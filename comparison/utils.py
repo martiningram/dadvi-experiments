@@ -13,6 +13,7 @@ from dadvi.pymc.models.microcredit import load_microcredit_model
 from dadvi.pymc.models.occ_det import get_occ_det_model_from_pickle
 from dadvi.pymc.models.potus import get_potus_model
 from dadvi.pymc.models.tennis import fetch_tennis_model
+from jqas_tennis_model import load_model_and_data
 import pymc as pm
 from jax.flatten_util import ravel_pytree
 from datetime import datetime
@@ -20,7 +21,7 @@ import socket
 from time import time
 
 
-NON_ARM_MODELS = ["microcredit", "occ_det", "potus", "tennis"]
+NON_ARM_MODELS = ["microcredit", "occ_det", "potus", "tennis", "tennis-jqas"]
 
 
 def load_model_by_name(model_name):
@@ -35,7 +36,10 @@ def load_model_by_name(model_name):
         model = get_potus_model(POTUS_JSON_PATH)
 
     elif model_name == "tennis":
-        model = fetch_tennis_model(1969, sackmann_dir=SACKMANN_DIR)['model']
+        model = fetch_tennis_model(1969, sackmann_dir=SACKMANN_DIR)["model"]
+
+    elif model_name == "tennis-jqas":
+        model = load_model_and_data(SACKMANN_DIR)
 
     else:
         df = pd.read_csv(ARM_CONFIG_CSV_PATH)
