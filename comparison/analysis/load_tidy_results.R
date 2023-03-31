@@ -24,8 +24,8 @@ IsARM <- function(model) { !(model %in% non_arm_models) }
 base_folder <- "/home/rgiordan/Documents/git_repos/DADVI/dadvi-experiments"
 paper_base_folder <- "/home/rgiordan/Documents/git_repos/DADVI/fd-advi-paper"
 
-input_folder <- file.path(base_folder, "comparison/blade_runs/") 
-output_folder <- file.path(paper_base_folder, "experiments_data") 
+input_folder <- file.path(base_folder, "comparison/blade_runs/")
+output_folder <- file.path(paper_base_folder, "experiments_data")
 
 # A list of stuff to be saved for the paper
 save_list <- list()
@@ -42,7 +42,7 @@ num_methods <- length(unique(raw_posteriors_df$method))
 
 stopifnot(length(unique(raw_param_df$method)) == 1)
 
-model_dims <- 
+model_dims <-
     raw_posteriors_df %>%
     filter(method == "DADVI") %>%
     group_by(model, param, method) %>%
@@ -77,15 +77,22 @@ save_list[["non_arm_models"]] <- non_arm_models
 
 unique(raw_posteriors_df$model) %>% sort()
 
-model_methods <-
-    group_by(raw_posteriors_df, model, method) %>%
-    summarise(.groups="drop") 
+unique(model_methods$method)
 
-incomplete_models <- 
+# For now a model is allowed to be missing LRVB_Doubling,
+# and must have at least one of LRVB or LRVB_CG
+model_methods <-
+    raw_posteriors_df %>%
+    filter(method != "LRVB_Doubling") %>%
+    mutate(method=str_replace(method, "LRVB_CG", "LRVB")) %>%
+    group_by(model, method) %>%
+    summarise(.groups="drop")
+
+incomplete_models <-
     model_methods %>%
     group_by(model) %>%
     summarize(n=n(), .groups="drop") %>%
-    filter(n <  num_methods) %>%
+    filter(n <  max(n)) %>%
     pull(model)
 
 # See which ones are missing.
@@ -151,7 +158,7 @@ setdiff(mcmc_nonconverged_models, mcmc_bad_models)
 
 filter(mcmc_diagnostics_df, model == "microcredit")
 
-    
+
 posteriors_df %>%
     group_by(method) %>%
     summarize(prop_converged=mean(converged))
@@ -172,7 +179,7 @@ metadata_df %>%
 ########################################
 # Inspect and categorize the parameters
 
-# See the parameter dimensions and filter reporting. 
+# See the parameter dimensions and filter reporting.
 # We will use this dataframe later to select which parameters
 # get reported in the output.
 
@@ -192,10 +199,10 @@ IsRE <- function(model, is_arm, param, dimension) {
 param_df <-
     posteriors_df %>%
     filter(method == "DADVI") %>%
-    left_join(raw_param_df %>% 
-                  rename(param=unconstrained_params) %>% 
+    left_join(raw_param_df %>%
+                  rename(param=unconstrained_params) %>%
                   mutate(status="unconstrainted") %>%
-                  select(model, param, status), 
+                  select(model, param, status),
               by=c("model", "param")) %>%
     mutate(is_unconstrained=!is.na(status)) %>%
     select(model, is_arm, param, is_unconstrained, -status) %>%
@@ -226,7 +233,7 @@ if (FALSE) {
     # Sanity check: look at the average runtime per operation.
     # If runtime is dominated by model evaluation, as we expect it
     # to be, this should not vary radically by method.
-    
+
     metadata_df %>%
         filter(method %in% c("DADVI", "RAABBVI", "SADVI", "SADVI_FR", "LRVB"),
                is_arm) %>%
@@ -235,7 +242,7 @@ if (FALSE) {
         facet_grid(method ~ .) +
         scale_x_log10() +
         ggtitle("Runtime per model evaluation (ARM only)")
-    
+
     metadata_df %>%
         filter(method %in% c("DADVI", "RAABBVI", "SADVI", "SADVI_FR"),
                !is_arm) %>%
@@ -245,7 +252,7 @@ if (FALSE) {
 
 
 
-# LRVB should have one HVP per parameter, but it's not.  I think this 
+# LRVB should have one HVP per parameter, but it's not.  I think this
 # is due to not correctly counting the dimension of the unconstrained parameters.
 metadata_df %>%
     filter(method == "LRVB") %>%
@@ -277,7 +284,7 @@ lrvb_runtimes_df <-
 # Compare the time to termination (if not convergence)
 # NUTS op count isn't counted correctly
 runtime_comp_df <-
-    filter(metadata_df, method != "DADVI") %>% 
+    filter(metadata_df, method != "DADVI") %>%
     select(method, model, runtime, op_count, time_per_op, converged) %>%
     inner_join(dadvi_runtimes_df, by=c("model"), suffix=c("", "_dadvi")) %>%
     mutate(runtime=case_when(method == "LRVB" ~ runtime + runtime_dadvi,
@@ -298,7 +305,7 @@ runtime_comp_df$method %>% unique()
 if (FALSE) {
     # Compare computational effort to a DADVI baseline
     ComputationComparisonHistogramGraph <- function(comp_df, col) {
-        plt <- ggplot(comp_df) + 
+        plt <- ggplot(comp_df) +
             geom_histogram(aes(x={{col}}, fill=method), bins=30) +
             facet_grid(method ~ .) +
             geom_vline(aes(xintercept=1)) +
@@ -306,27 +313,27 @@ if (FALSE) {
             expand_limits(x=1)
         return(plt)
     }
-    
+
     comp_methods <- c("NUTS", "RAABBVI", "SADVI", "SADVI_FR")
     runtime_arm_df <-runtime_comp_df %>%
-        filter(method %in% comp_methods, is_arm) 
+        filter(method %in% comp_methods, is_arm)
 
     runtime_dadvi_plot <-
         ComputationComparisonHistogramGraph(runtime_arm_df, runtime_vs_dadvi) +
         xlab("Runtime / DADVI runtime")
-        
+
     op_dadvi_plot <-
         ComputationComparisonHistogramGraph(runtime_arm_df, op_count_vs_dadvi) +
-        xlab("Model evaluations / DADVI model evaluations") 
-    
+        xlab("Model evaluations / DADVI model evaluations")
+
     runtime_lrvb_plot <-
         ComputationComparisonHistogramGraph(runtime_arm_df, runtime_vs_lrvb) +
         xlab("Runtime / LRVB runtime")
-    
+
     op_lrvb_plot <-
         ComputationComparisonHistogramGraph(runtime_arm_df, op_count_vs_lrvb) +
-        xlab("Model evaluations / LRVB model evaluations") 
-    
+        xlab("Model evaluations / LRVB model evaluations")
+
     grid.arrange(runtime_dadvi_plot, op_dadvi_plot, runtime_lrvb_plot, op_lrvb_plot, ncol=2)
 
     # Look at the big models using a different visualization
@@ -415,13 +422,13 @@ trace_scales_df <-
 #         numericInput("model_index", "Model index", 1, min=1, max=length(trace_models), step=1),
 #         plotOutput("plot")
 #     )
-#     
+#
 #     server <- function(input, output, session) {
 #         selected_model <- reactive({
 #             trace_models[input$model_index]
 #         })
 #         dataset <- reactive({
-#             trace_df %>% 
+#             trace_df %>%
 #                 filter(model == selected_model()) %>%
 #                 filter(method == "SADVI") %>%
 #                 group_by(model) %>%
@@ -436,7 +443,7 @@ trace_scales_df <-
 #                 ggtitle(selected_model())
 #         }, res = 96)
 #     }
-#     
+#
 #     shinyApp(ui, server)
 # }
 
@@ -451,10 +458,10 @@ trace_offset_df <-
 
 
 
-Cap <- function(x, min=-1e3, max=1e3) { 
+Cap <- function(x, min=-1e3, max=1e3) {
     return(case_when(x < min ~ min,
                      x > max ~ max,
-                     TRUE ~ x))        
+                     TRUE ~ x))
 }
 
 # Compute "normed" objective values for common plotting
@@ -469,7 +476,7 @@ trace_norm_df <-
            obj_value_norm=(obj_value - obj_value_dadvi) / obj_value_sd,
            obj_value_norm_cap=Cap(obj_value_norm, min=-Inf, max=1e5))
 
-# Get the termination point of each method 
+# Get the termination point of each method
 trace_norm_termination_df <-
     trace_norm_df %>%
     group_by(model, method) %>%
@@ -478,7 +485,7 @@ trace_norm_termination_df <-
 if (FALSE) {
     View(trace_norm_termination_df)
 }
-    
+
 SignedLog10 <- function(x) {
     case_when(x == 0 ~ 0,
               TRUE ~ sign(x) * log10(abs(x)))
@@ -510,7 +517,7 @@ save_list[["trace_norm_df"]] <- trace_norm_df
 
 if (FALSE) {
     # This is the one!
-    
+
     PlotTraces <- function(df) {
         trace_norm_termination_df <-
             df %>%
@@ -531,7 +538,7 @@ if (FALSE) {
             xlab("Number of function calls / number of DADVI function calls\n(Values > 1 are log10 transformed)") +
             ylab("(ELBO - DADVI optimal ELBO) / DADVI optimal ELBO standard deviation \n(signed log10 transformed)")
     }
-    
+
     PlotTraces(trace_norm_df %>% filter(is_arm)) +
         ggtitle("Standardized optimization traces for ARM") +
         facet_grid(method ~ .)
@@ -540,7 +547,7 @@ if (FALSE) {
     PlotTraces(trace_norm_df %>% filter(!is_arm))  +
         ggtitle("Standardized optimization traces for non-ARM") +
         facet_grid(method ~ model)
-    
+
 }
 
 
@@ -551,13 +558,13 @@ if (FALSE) {
         numericInput("model_index", "Model index", 1, min=1, max=length(trace_models), step=1),
         plotOutput("plot")
     )
-    
+
     server <- function(input, output, session) {
         selected_model <- reactive({
             trace_models[input$model_index]
         })
         dataset <- reactive({
-            trace_norm_df %>% 
+            trace_norm_df %>%
                 filter(model == selected_model()) %>%
                 filter(method == "RAABBVI")
         })
@@ -571,7 +578,7 @@ if (FALSE) {
                 scale_y_continuous(trans=SignedLog10Transform, breaks=breaks)
         }, res = 96)
     }
-    
+
     shinyApp(ui, server)
 }
 
@@ -609,14 +616,47 @@ results_df <-
     mutate(mean_z_err=(mean - mean_ref) / sd_ref,
            sd_rel_err=(sd - sd_ref) / sd_ref) %>%
     mutate(is_arm=IsARM(model),
-           param_ind=paste0(param, ind)) %>% # Easier to count distinct parameters  
+           param_ind=paste0(param, ind)) %>% # Easier to count distinct parameters
     inner_join(param_df, by=c("model", "param", "is_arm")) %>%
     filter(report_param)
 save_list[["results_df"]] <- results_df
 
 # Sanity check for bad reference values
-filter(results_df, sd_ref < 1e-6) %>% 
+filter(results_df, sd_ref < 1e-6) %>%
     select(method, model, param, ind, mean, sd, mean_ref, sd_ref)
+
+
+########################################
+# Exploration.  What's going on with tennis?
+
+tennis_results_df <-
+    filter(results_df, model == "tennis") %>%
+    select(method, param, ind, mean, sd, mean_ref, sd_ref)
+
+tennis_results_df %>%
+    group_by(method, param) %>%
+    summarize(n=n())
+
+grid.arrange(
+    ggplot(tennis_results_df %>% filter(param == "player_skills")) +
+        geom_point(aes(x=mean_ref, y=mean, color=method)) +
+        geom_abline(aes(slope=1, intercept=0)) +
+        xlab("NUTS mean")
+,
+    ggplot(tennis_results_df %>% filter(param == "player_skills")) +
+        geom_point(aes(x=sd_ref, y=sd, color=method)) +
+        geom_abline(aes(slope=1, intercept=0)) +
+    xlab("NUTS sd")
+, ncol=2
+)
+
+print(tennis_results_df)
+
+tennis_results_df %>%
+    group_by(param, method) %>%
+    summarize(mean_mse=sqrt(mean(mean / sd_ref - mean_ref / sd_ref)^2),
+              sd_mse=sqrt(mean(sd / sd_ref - 1)^2))
+
 
 
 ########################################
@@ -643,14 +683,14 @@ GetMethodComparisonDf <- function(results_df, method1, method2, group_cols) {
         any(is.na(agg_results_df$mean_z_rmse)),
         any(is.na(agg_results_df$sd_rel_rmse))
     )))
-    
+
     comp_df <-
         inner_join(filter(agg_results_df, method == !!method1),
                    filter(agg_results_df, method == !!method2),
                    suffix=c("_1", "_2"),
                    by=group_cols) %>%
         mutate(comparison=paste0(method1, " vs ", method2))
-    return(comp_df)    
+    return(comp_df)
 }
 
 arm_group_cols <- c("model", "param")
@@ -658,7 +698,7 @@ arm_df <-
     bind_rows(
         results_df %>%
             filter(is_arm) %>%
-            GetMethodComparisonDf("LRVB", "SADVI", 
+            GetMethodComparisonDf("LRVB", "SADVI",
                                   group_cols=arm_group_cols),
         results_df %>%
             filter(is_arm) %>%
@@ -668,7 +708,7 @@ arm_df <-
             filter(is_arm) %>%
             GetMethodComparisonDf("LRVB", "SADVI_FR",
                                   group_cols=arm_group_cols)
-    ) 
+    )
 #%>%    mutate(re_label=ifelse(is_re, "Random effect", "Fixed effect"))
 save_list[["arm_df"]] <- arm_df
 
@@ -677,7 +717,7 @@ nonarm_df <-
     bind_rows(
         results_df %>%
             filter(!is_arm) %>%
-            GetMethodComparisonDf("LRVB", "SADVI", 
+            GetMethodComparisonDf("LRVB", "SADVI",
                                   group_cols=nonarm_group_cols),
         results_df %>%
             filter(!is_arm) %>%
@@ -690,21 +730,21 @@ if (FALSE) {
     # What models does DADVI do badly on?
     threshold <- 0.4
     dadvi_bad_models <-
-        # filter(arm_df, mean_z_rmse_1 > threshold & 
+        # filter(arm_df, mean_z_rmse_1 > threshold &
         #                mean_z_rmse_2 < threshold) %>%
         filter(arm_df, mean_z_rmse_1 > threshold) %>%
         pull(model) %>%
         unique()
-    
+
     print(dadvi_bad_models)
 
-    filter(results_df, model %in% dadvi_bad_models) %>% 
+    filter(results_df, model %in% dadvi_bad_models) %>%
         select(model, param, ind, method, mean, mean_ref, mean_z_err) %>%
         arrange(model, param, ind, method) %>%
         View()
 
-    metadata_df %>% 
-        filter(model %in% dadvi_bad_models) %>% 
+    metadata_df %>%
+        filter(model %in% dadvi_bad_models) %>%
         arrange(model, method) %>% View()
 }
 
@@ -723,7 +763,7 @@ if (FALSE) {
 if (FALSE) {
     # The ARM graph we want
     arm_mean_plot <-
-        arm_df %>% 
+        arm_df %>%
         ggplot(aes(x=mean_z_rmse_1, y=mean_z_rmse_2)) +
         geom_density2d(size=1.5) +
         geom_point() +
@@ -743,14 +783,14 @@ if (FALSE) {
         facet_grid(comparison ~ ., scales="fixed") +
         scale_x_log10() + scale_y_log10() +
         ggtitle("SD relative error (ARM)")
-    
+
     grid.arrange(
         arm_mean_plot, arm_sd_plot,
         ncol=2
     )
-    
+
     nonarm_mean_plot <-
-        nonarm_df %>% 
+        nonarm_df %>%
         ggplot(aes(x=mean_z_rmse_1, y=mean_z_rmse_2)) +
         #geom_density2d() +
         geom_point(aes(shape=model, color=model), size=4) +
@@ -760,9 +800,9 @@ if (FALSE) {
         facet_grid(comparison ~ ., scales="fixed") +
         scale_x_log10() + scale_y_log10() +
         ggtitle("Mean relative error (non-ARM)")
-    
+
     nonarm_sd_plot <-
-        nonarm_df %>% 
+        nonarm_df %>%
         ggplot(aes(x=sd_rel_rmse_1, y=sd_rel_rmse_2)) +
         #geom_density2d() +
         geom_point(aes(shape=model, color=model), size=4) +

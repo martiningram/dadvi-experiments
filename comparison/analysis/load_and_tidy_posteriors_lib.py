@@ -177,7 +177,8 @@ def GetMetadataDataframe(folder, method, return_raw_metadata=False):
         'NUTS': 'nuts_info',
         'SADVI': 'info',
         'SADVI_FR': 'info',
-        'LRVB_Doubling': 'lrvb_info' }
+        'LRVB_Doubling': 'lrvb_info',
+        'LRVB_CG': 'info' }
 
     draw_filenames, model_names = GetDrawFilenames(folder)
 
