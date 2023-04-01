@@ -1,4 +1,7 @@
+import numpy as np
+import pickle
 import os
+from time import time
 from functools import partial
 from glob import glob
 from jax.config import config
@@ -7,13 +10,12 @@ from collections import defaultdict
 
 config.update("jax_enable_x64", True)
 
-import numpy as np
-import pickle
 from utils import get_occ_det_model_from_pickle
 from config import OCC_DET_PICKLE_PATH
 from dadvi.jax import build_dadvi_funs
 from dadvi.pymc.pymc_to_jax import get_jax_functions_from_pymc
 from dadvi.pymc.jax_api import DADVIResult
+from utils import get_run_datetime_and_hostname
 
 
 def pres_prob(params, sample_loc, species_id):
@@ -69,17 +71,24 @@ draw_files = glob(
 
 full_res = defaultdict(list)
 
+total_runtime = 0.
+total_hvp = 0
+
 for species_id in species_chosen:
 
     print(species_id)
 
     cur_fun = partial(pres_prob, species_id=species_id, sample_loc=sample_loc)
 
+    cur_start_time = time()
     cur_res = (
         dadvi_res.get_frequentist_sd_and_lrvb_correction_of_scalar_valued_function(
             cur_fun
         )
     )
+    cur_end_time = time()
+    total_runtime += (cur_end_time - cur_start_time)
+    total_hvp += cur_res['n_hvp_calls']
 
     cur_draws = np.random.normal(
         loc=cur_res["mean"], scale=cur_res["lrvb_sd"], size=1000
@@ -90,6 +99,11 @@ for species_id in species_chosen:
     for cur_file in draw_files:
 
         short_name = "_".join(cur_file.split("/")[-3].split("_")[:-1])
+
+        # Skip if lrvb_cg -- recomputing
+        if short_name == 'lrvb_cg':
+            continue
+
         cur_loaded = dict(np.load(cur_file))
         cur_result = compute_distribution_from_draws(cur_loaded, cur_fun)
         full_res[short_name].append(cur_result)
@@ -100,13 +114,15 @@ full_res = {x: np.stack(y, axis=-1) for x, y in full_res.items()}
 for cur_file in draw_files:
 
     short_name = "_".join(cur_file.split("/")[-3].split("_")[:-1])
+
+    if short_name == 'lrvb_cg':
+        continue
+
     cur_loaded = dict(np.load(cur_file))
     cur_result = full_res[short_name]
     cur_loaded["presence_prediction"] = cur_result
     np.savez(cur_file, **cur_loaded)
 
-# TODO: Need timing summaries also
-# Also make one for LRVB_CG containing only this field
 target_folder = (
     f"{EXPERIMENT_BASE_DIR}/lrvb_cg_results/draw_dicts/"
 )
@@ -115,3 +131,21 @@ os.makedirs(target_folder, exist_ok=True)
 np.savez(
     os.path.join(target_folder, "occ_det.npz"), presence_prediction=full_res["lrvb_cg"]
 )
+
+# Save the runtime etc also
+runtime_cost = {
+        'lrvb_hvp_calls': total_hvp,
+        'lrvb_runtime': total_runtime,
+        **get_run_datetime_and_hostname()
+}
+
+target_folder = (
+    f"{EXPERIMENT_BASE_DIR}/lrvb_cg_results/lrvb_cg_info/"
+)
+
+os.makedirs(target_folder, exist_ok=True)
+
+target_file = os.path.join(target_folder, f"occ_det.pkl")
+
+with open(target_file, "wb") as f:
+    pickle.dump(runtime_cost, f)
