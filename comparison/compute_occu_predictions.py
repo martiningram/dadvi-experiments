@@ -39,8 +39,11 @@ def compute_distribution_from_draws(draws, function):
     return results
 
 
+OCCU_DADVI_PATH = "/home/martin.ingram/experiment_runs/march_2023/dadvi_results/dadvi_info/occ_det.pkl"
+EXPERIMENT_BASE_DIR = '/home/martin.ingram/experiment_runs/march_2023'
+
 # Load occ_det results
-occ_res = pickle.load(open("../occ_det.pkl", "rb"))
+occ_res = pickle.load(open(OCCU_DADVI_PATH, "rb"))
 model = get_occ_det_model_from_pickle(OCC_DET_PICKLE_PATH)
 occ_pickle = pickle.load(open(OCC_DET_PICKLE_PATH, "rb"))
 
@@ -61,14 +64,14 @@ species_chosen = np.random.choice(occ_pickle["y_df"].shape[1], size=20, replace=
 sample_loc = occ_pickle["X_env_mat"][200]
 
 draw_files = glob(
-    "/Users/martin.ingram/Projects/PhD/dadvi_experiments/comparison/analysis/"
-    "tennis_draw_dicts/media/martin/External Drive/projects/lrvb_paper/"
-    "dadvi_runs_february_2023_2/*/draw_dicts/occ_det.npz"
+   f"{EXPERIMENT_BASE_DIR}/*/draw_dicts/occ_det.npz"
 )
 
 full_res = defaultdict(list)
 
 for species_id in species_chosen:
+
+    print(species_id)
 
     cur_fun = partial(pres_prob, species_id=species_id, sample_loc=sample_loc)
 
@@ -105,9 +108,7 @@ for cur_file in draw_files:
 # TODO: Need timing summaries also
 # Also make one for LRVB_CG containing only this field
 target_folder = (
-    "/Users/martin.ingram/Projects/PhD/dadvi_experiments/comparison/analysis/"
-    "tennis_draw_dicts/media/martin/External Drive/projects/lrvb_paper/"
-    "dadvi_runs_february_2023_2/lrvb_cg_results/draw_dicts/"
+    f"{EXPERIMENT_BASE_DIR}/lrvb_cg_results/draw_dicts/"
 )
 
 os.makedirs(target_folder, exist_ok=True)

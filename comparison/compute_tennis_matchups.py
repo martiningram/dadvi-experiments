@@ -29,7 +29,8 @@ def compute_distribution_from_draws(draws, function):
     return results
 
 
-TENNIS_PICKLE_FILE = "./analysis/tennis.pkl"
+EXPERIMENT_BASE_DIR = '/home/martin.ingram/experiment_runs/march_2023'
+TENNIS_PICKLE_FILE = "/home/martin.ingram/experiment_runs/march_2023/dadvi_results/dadvi_info/tennis.pkl"
 tennis_res = pickle.load(open(TENNIS_PICKLE_FILE, "rb"))
 tennis_model = fetch_tennis_model(1969, sackmann_dir=SACKMANN_DIR)
 model = tennis_model["model"]
@@ -50,8 +51,9 @@ p2_choices = np.random.choice(
     [x for x in encoder.classes_ if x not in p1_choices], size=20, replace=False
 )
 
+
 draw_files = glob(
-    "/Users/martin.ingram/Projects/PhD/dadvi_experiments/comparison/analysis/tennis_draw_dicts/media/martin/External Drive/projects/lrvb_paper/dadvi_runs_february_2023_2/*/draw_dicts/tennis.npz"
+   f"{EXPERIMENT_BASE_DIR}/*/draw_dicts/tennis.npz"
 )
 
 pairs = [*zip(p1_choices, p2_choices)]
@@ -116,9 +118,7 @@ for cur_file in draw_files:
 
 # Make a final one for lrvb_cg
 target_dir = (
-    "/Users/martin.ingram/Projects/PhD/dadvi_experiments/comparison/analysis/"
-    "tennis_draw_dicts/media/martin/External Drive/projects/lrvb_paper/"
-    "dadvi_runs_february_2023_2/lrvb_cg_results/draw_dicts/"
+    f"{EXPERIMENT_BASE_DIR}/lrvb_cg_results/draw_dicts/"
 )
 
 os.makedirs(target_dir, exist_ok=True)
