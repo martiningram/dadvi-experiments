@@ -5,7 +5,13 @@ import numpy as np
 import pickle
 
 VALID_METHODS = \
-    ['NUTS', 'RAABBVI', 'DADVI', 'SADVI', 'SADVI_FR', 'LRVB_Doubling']
+    ['NUTS',
+     'RAABBVI',
+     'DADVI',
+     'SADVI',
+     'SADVI_FR',
+     'LRVB_Doubling',
+     'LRVB_CG']
 
 
 def LoadPickleSafely(pickle_file):
@@ -69,8 +75,9 @@ def GetMethodDataframe(folder, method):
 
 # Metadata
 
-def GetEvaluationCount(method, metadata):
+def GetModelGradCount(method, metadata):
     missing_value = float('NaN')
+    n_calls = missing_value
     if method == 'NUTS':
         # This is not apples-to-apples obviously, and there may have been
         # calls in the MH step or warmup that are not accounted for.
@@ -79,16 +86,13 @@ def GetEvaluationCount(method, metadata):
         n_calls = metadata['kl_hist_i'].max()
     elif method == 'DADVI':
         evaluation_count = metadata['opt_result']['evaluation_count']
-        M = GetNumDraws(method, metadata)
+        # M = GetNumDraws(method, metadata)
         # Martin says: each gradient call in DADVI actually parallelises across
         # M draws. The factor of 2 for the hvp is there because it requires
         # two jacobian-vector products.
-        n_calls = 2 * M * evaluation_count['n_hvp_calls'] + \
-                  M * evaluation_count['n_val_and_grad_calls']
-    elif method == 'LRVB':
-        # TODO(Martin): is this correct?
-        M = GetNumDraws(method, metadata)
-        n_calls = 2 * M * metadata['lrvb_hvp_calls']
+        # n_calls = 2 * M * evaluation_count['n_hvp_calls'] + \
+        #           M * evaluation_count['n_val_and_grad_calls']
+        n_calls = evaluation_count['n_val_and_grad_calls']
     elif method == 'SADVI':
         n_calls = metadata['steps']
     elif method == 'SADVI_FR':
@@ -97,8 +101,31 @@ def GetEvaluationCount(method, metadata):
     elif method == 'LRVB_Doubling':
         # Need to save all the steps in the metadata
         n_calls = missing_value
+    elif method == 'LRVB':
+        # Uses only HVP
+        n_calls = 0
+    elif method == 'LRVB_CG':
+        # Uses only HVP
+        n_calls = 0
     else:
         raise ValueError(f'Invalid method {method}\n')
+    return n_calls
+
+
+def GetModelHVPCount(method, metadata):
+    missing_value = float('NaN')
+    n_calls = missing_value
+    if method == 'DADVI':
+        evaluation_count = metadata['opt_result']['evaluation_count']
+        n_calls = evaluation_count['n_hvp_calls']
+    elif method == 'LRVB':
+        n_calls = metadata['lrvb_hvp_calls']
+    elif method == 'LRVB_Doubling':
+        # Need to save all the steps in the metadata
+        n_calls = missing_value
+    elif method == 'LRVB_CG':
+        n_calls = metadata['lrvb_hvp_calls']
+
     return n_calls
 
 
@@ -133,6 +160,8 @@ def CheckConvergence(method, metadata):
         return missing_value
     elif method == 'LRVB_Doubling':
         return missing_value
+    elif method == 'LRVB_CG':
+        return missing_value
     else:
         print(f'Invalid method {method}\n')
         assert(False)
@@ -165,6 +194,8 @@ def GetKLStdev(method, metadata):
 def GetRuntime(method, metadata):
     if method == 'LRVB':
         return metadata['runtime_lrvb']
+    if method == 'LRVB_CG':
+        return metadata['lrvb_runtime']
     else:
         return metadata['runtime']
 
@@ -178,7 +209,7 @@ def GetMetadataDataframe(folder, method, return_raw_metadata=False):
         'SADVI': 'info',
         'SADVI_FR': 'info',
         'LRVB_Doubling': 'lrvb_info',
-        'LRVB_CG': 'info' }
+        'LRVB_CG': 'lrvb_cg_info' }
 
     draw_filenames, model_names = GetDrawFilenames(folder)
 
@@ -205,7 +236,8 @@ def GetMetadataDataframe(folder, method, return_raw_metadata=False):
         'model': model_names_keep,
         'runtime': [ GetRuntime(method, m) for m in raw_metadata ],
         'converged': [ CheckConvergence(method, m) for m in raw_metadata ],
-        'op_count': [ GetEvaluationCount(method, m) for m in raw_metadata ],
+        'grad_count': [ GetModelGradCount(method, m) for m in raw_metadata ],
+        'hvp_count': [ GetModelHVPCount(method, m) for m in raw_metadata ],
         'num_draws': [ GetNumDraws(method, m) for m in raw_metadata ],
         'kl_sd': [ GetKLStdev(method, m) for m in raw_metadata ]
         } )
@@ -260,6 +292,8 @@ def GetObjectiveTraces(method, metadata):
         pass
     elif method == 'LRVB_Doubling':
         # TODO: compile the full results
+        pass
+    elif method == 'LRVB_CG':
         pass
     else:
         print(f'Invalid method {method}\n')

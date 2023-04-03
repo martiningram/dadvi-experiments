@@ -38,7 +38,6 @@ raw_trace_df <- read.csv(file.path(input_folder, "trace_tidy.csv"), as.is=TRUE)
 raw_param_df <- read.csv(file.path(input_folder, "params_tidy.csv"), as.is=TRUE)
 mcmc_diagnostics_df <- read.csv(file.path(input_folder, "mcmc_diagnostics_tidy.csv"), as.is=TRUE)
 
-num_methods <- length(unique(raw_posteriors_df$method))
 
 stopifnot(length(unique(raw_param_df$method)) == 1)
 
@@ -54,13 +53,41 @@ model_dims <-
 save_list[["model_dims"]] <- model_dims
 
 
+
+# Compute M * (2 * hvp + grad calss for op count)
+filter(raw_metadata_df, method == "LRVB_Doubling")
+num_methods <- length(unique(raw_posteriors_df$method))
+
+
+# LRVB_CG didn't save the number of draws, so we need to join with DADVI
+dadvi_num_draws <-
+    raw_metadata_df %>%
+    filter(method == "DADVI") %>%
+    select(model, num_draws)
+
 metadata_df <-
     raw_metadata_df %>%
+    left_join(dadvi_num_draws, by="model", suffix=c("", "_dadvi")) %>%
     filter(!(model %in% models_to_remove)) %>%
+    mutate(op_count=case_when(
+        method == "DADVI" ~ num_draws * (2 * hvp_count + grad_count),
+        method == "LRVB" ~ num_draws * (2 * hvp_count + grad_count),
+        method == "LRVB_CG" ~ num_draws_dadvi * (2 * hvp_count + grad_count),
+        TRUE ~ grad_count
+    )) %>%
     mutate(is_arm = IsARM(model),
            time_per_op=runtime / op_count,
            converged=as.logical(converged)) %>%
     inner_join(select(model_dims, model, dim), by="model")
+
+# Sanity check
+metadata_df %>%
+    filter(method %in% c("DADVI", "LRVB")) %>%
+    mutate(check=num_draws == num_draws_dadvi) %>%
+    pull(check) %>%
+    all() %>%
+    stopifnot()
+
 save_list[["metadata_df"]] <- metadata_df
 
 
@@ -121,7 +148,14 @@ stopifnot(length(intersect(arm_models, incomplete_models)) == 0)
 
 head(posteriors_df)
 
+# TODO: check carefully
+posteriors_df %>%
+    group_by(model, method) %>%
+    summarize(n=n())
 
+metadata_df %>%
+    group_by(model, method) %>%
+    summarize(n=n())
 
 
 ########################################
@@ -238,22 +272,31 @@ if (FALSE) {
         filter(method %in% c("DADVI", "RAABBVI", "SADVI", "SADVI_FR", "LRVB"),
                is_arm) %>%
         ggplot() +
-        geom_histogram(aes(x=time_per_op, fill=method)) +
-        facet_grid(method ~ .) +
-        scale_x_log10() +
-        ggtitle("Runtime per model evaluation (ARM only)")
+            geom_histogram(aes(x=time_per_op, fill=method)) +
+            facet_grid(method ~ .) +
+            scale_x_log10() +
+            ggtitle("Runtime per model evaluation (ARM only)")
 
     metadata_df %>%
-        filter(method %in% c("DADVI", "RAABBVI", "SADVI", "SADVI_FR"),
+        filter(method %in% c("DADVI", "RAABBVI", "SADVI", "SADVI_FR", "LRVB_CG", "LRVB"),
                !is_arm) %>%
         select(model, method, time_per_op, runtime, op_count) %>%
         arrange(model,  method)
+
+    metadata_df %>%
+        filter(method %in% c("DADVI", "RAABBVI", "SADVI", "SADVI_FR", "LRVB_CG", "LRVB"),
+               !is_arm) %>%
+        select(model, method, time_per_op, runtime, op_count) %>%
+        ggplot() +
+            geom_bar(aes(x=model, y=time_per_op, fill=method, group=method),
+                     position=position_dodge(), stat="Identity")
+
 }
 
 
 
-# LRVB should have one HVP per parameter, but it's not.  I think this
-# is due to not correctly counting the dimension of the unconstrained parameters.
+# The way we compute LRVB is use HVP evaluations once per dimension.
+# But we see four.  Why?
 metadata_df %>%
     filter(method == "LRVB") %>%
     select(model, method, op_count, dim, num_draws) %>%
@@ -288,8 +331,10 @@ runtime_comp_df <-
     select(method, model, runtime, op_count, time_per_op, converged) %>%
     inner_join(dadvi_runtimes_df, by=c("model"), suffix=c("", "_dadvi")) %>%
     mutate(runtime=case_when(method == "LRVB" ~ runtime + runtime_dadvi,
+                             method == "LRVB_CG" ~ runtime + runtime_dadvi,
                              TRUE ~ runtime),
            op_count=case_when(method == "LRVB" ~ op_count + op_count_dadvi,
+                              method == "LRVB_CG" ~ op_count + op_count_dadvi,
                               method == "NUTS" ~ as.numeric(NA),
                               TRUE ~ op_count)) %>%
     inner_join(lrvb_runtimes_df, by=c("model"), suffix=c("", "_lrvb")) %>%
@@ -338,7 +383,7 @@ if (FALSE) {
 
     # Look at the big models using a different visualization
     runtime_comp_df %>%
-        filter(method %in% c("NUTS", "RAABBVI", "SADVI", "LRVB"), !is_arm) %>%
+        filter(method %in% c("NUTS", "RAABBVI", "SADVI", "LRVB", "LRVB_CG"), !is_arm) %>%
         select(model, method, runtime, runtime_dadvi, runtime_vs_dadvi, runtime_lrvb, runtime_vs_lrvb) %>%
         arrange(model, method)
 
@@ -399,53 +444,11 @@ trace_df %>%
     summarize(min_n_calls=min(n_calls))
 
 
-# This was the old way:
-# Get a "scale" by looking at the sd of the final 5% (or 100) SADVI iterates
-# trace_scales_df <-
-#     trace_df %>%
-#     filter(method == "SADVI") %>%
-#     group_by(model) %>%
-#     mutate(max_n_calls=max(n_calls)) %>%
-#     mutate(n_calls_prop=n_calls / max_n_calls) %>%
-#     filter((n_calls_prop > 0.95) | (max(n_calls) - n_calls < 100)) %>%
-#     summarise(n=n(), obj_value_sd=sd(obj_value)) %>%
-#     select(model, obj_value_sd)
 trace_scales_df <-
     filter(metadata_df, method == "DADVI") %>%
     select(model, kl_sd) %>%
     rename(obj_value_sd=kl_sd)
 
-# if (FALSE) {
-#     # Sanity check our "scales"
-#     trace_models <- unique(trace_df$model)
-#     ui <- fluidPage(
-#         numericInput("model_index", "Model index", 1, min=1, max=length(trace_models), step=1),
-#         plotOutput("plot")
-#     )
-#
-#     server <- function(input, output, session) {
-#         selected_model <- reactive({
-#             trace_models[input$model_index]
-#         })
-#         dataset <- reactive({
-#             trace_df %>%
-#                 filter(model == selected_model()) %>%
-#                 filter(method == "SADVI") %>%
-#                 group_by(model) %>%
-#                 mutate(max_n_calls=max(n_calls)) %>%
-#                 mutate(n_calls_prop=n_calls / max_n_calls) %>%
-#                 filter((n_calls_prop > 0.95) | (max(n_calls) - n_calls < 100)) %>%
-#                 mutate(obj_value_z=(obj_value - mean(obj_value)) / sd(obj_value))
-#         })
-#         output$plot <- renderPlot({
-#             ggplot(dataset()) +
-#                 geom_line(aes(x=n_calls_prop, y=obj_value_z, group=model)) +
-#                 ggtitle(selected_model())
-#         }, res = 96)
-#     }
-#
-#     shinyApp(ui, server)
-# }
 
 # Get a "location" by looking at termination of the DADVI algorithm
 trace_offset_df <-
@@ -602,6 +605,9 @@ posteriors_df %>%
 ########################################
 # Posteriors
 
+posteriors_df %>% pull(method) %>% unique()
+
+
 ########################################
 # Compare to a reference method
 
@@ -627,7 +633,7 @@ filter(results_df, sd_ref < 1e-6) %>%
 
 
 ########################################
-# Exploration.  What's going on with tennis?
+# What's going on with tennis?
 
 tennis_results_df <-
     filter(results_df, model == "tennis") %>%
@@ -637,18 +643,20 @@ tennis_results_df %>%
     group_by(method, param) %>%
     summarize(n=n())
 
-grid.arrange(
-    ggplot(tennis_results_df %>% filter(param == "player_skills")) +
-        geom_point(aes(x=mean_ref, y=mean, color=method)) +
-        geom_abline(aes(slope=1, intercept=0)) +
-        xlab("NUTS mean")
-,
-    ggplot(tennis_results_df %>% filter(param == "player_skills")) +
-        geom_point(aes(x=sd_ref, y=sd, color=method)) +
-        geom_abline(aes(slope=1, intercept=0)) +
-    xlab("NUTS sd")
-, ncol=2
-)
+if (FALSE) {
+    grid.arrange(
+        ggplot(tennis_results_df %>% filter(param == "player_skills")) +
+            geom_point(aes(x=mean_ref, y=mean, color=method)) +
+            geom_abline(aes(slope=1, intercept=0)) +
+            xlab("NUTS mean")
+        ,
+        ggplot(tennis_results_df %>% filter(param == "player_skills")) +
+            geom_point(aes(x=sd_ref, y=sd, color=method)) +
+            geom_abline(aes(slope=1, intercept=0)) +
+            xlab("NUTS sd")
+        , ncol=2
+    )
+}
 
 print(tennis_results_df)
 
@@ -657,6 +665,16 @@ tennis_results_df %>%
     summarize(mean_mse=sqrt(mean(mean / sd_ref - mean_ref / sd_ref)^2),
               sd_mse=sqrt(mean(sd / sd_ref - 1)^2))
 
+
+
+########################################
+# Look at LR-CG alone
+
+results_df$method %>% unique()
+
+results_df %>%
+    filter(method=="LRVB_CG") %>%
+    select(method, param, ind, mean, sd, mean_ref, sd_ref)
 
 
 ########################################
@@ -725,6 +743,19 @@ nonarm_df <-
                                   group_cols=nonarm_group_cols)
     )
 save_list[["nonarm_df"]] <- nonarm_df
+
+nonarm_cg_df <-
+    bind_rows(
+        results_df %>%
+            filter(!is_arm) %>%
+            GetMethodComparisonDf("LRVB_CG", "SADVI",
+                                  group_cols=nonarm_group_cols),
+        results_df %>%
+            filter(!is_arm) %>%
+            GetMethodComparisonDf("LRVB_CG", "RAABBVI",
+                                  group_cols=nonarm_group_cols)
+    )
+save_list[["nonarm_cg_df"]] <- nonarm_cg_df
 
 if (FALSE) {
     # What models does DADVI do badly on?
@@ -817,6 +848,18 @@ if (FALSE) {
         nonarm_mean_plot, nonarm_sd_plot,
         ncol=2
     )
+
+    nonarm_cg_sd_plot <-
+        nonarm_cg_df %>%
+        ggplot(aes(x=sd_rel_rmse_1, y=sd_rel_rmse_2)) +
+        #geom_density2d() +
+        geom_point(aes(shape=model, color=model), size=4) +
+        scale_shape(solid=TRUE) +
+        geom_abline(aes(slope=1, intercept=0)) +
+        xlab("DADVI") + ylab("Stochastic VI") +
+        facet_grid(comparison ~ ., scales="fixed") +
+        scale_x_log10() + scale_y_log10() +
+        ggtitle("SD relative error (non-ARM)")
 
 }
 
