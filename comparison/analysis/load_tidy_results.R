@@ -99,6 +99,20 @@ non_arm_models <-
 save_list[["non_arm_models"]] <- non_arm_models
 
 
+# You can inner join with this
+# dataframe to get LRVB results from a dataframe.
+# The logic is that if LRVB_CG is available, that should count as our
+# LRVB method.
+lrvb_methods_df <-
+    metadata_df %>%
+    filter(method %in% c("LRVB", "LRVB_CG")) %>%
+    select(method, model, op_count) %>%
+    pivot_wider(id_cols="model", names_from=method, values_from=op_count) %>%
+    mutate(method=case_when(!is.na(LRVB_CG) ~ "LRVB_CG",
+                            TRUE ~ "LRVB")) %>%
+    select(model, method)
+
+
 #########################################################
 # Check for models that didn't run with all methods
 
@@ -310,24 +324,26 @@ dadvi_runtimes_df <-
     select(method, model, runtime, op_count) %>%
     filter(method == "DADVI")
 
+
+
 lrvb_runtimes_df <-
     metadata_df %>%
     select(method, model, runtime, op_count) %>%
-    filter(method == "LRVB") %>%
+    inner_join(lrvb_methods_df, by=c("model", "method")) %>%
+    mutate(method="LR") %>%
     inner_join(dadvi_runtimes_df, suffix=c("", "_DADVI"), by=c("model")) %>%
     mutate(runtime=runtime + runtime_DADVI,
            op_count=op_count + op_count_DADVI) %>%
-    select(-runtime_DADVI, -op_count_DADVI)
-
-    # select(method, model, runtime) %>%
-    # mutate(LRVB_plus_DADVI=LRVB + DADVI) %>%
-    # arrange(LRVB_minus_DADVI)
+    select(-runtime_DADVI, -op_count_DADVI, -method_DADVI)
+# %>%
+#     pivot_wider(id_cols="model", names_from=method, values_from=c(op_count, runtime))
 
 
 # Compare the time to termination (if not convergence)
 # NUTS op count isn't counted correctly
+comp_methods <- c("NUTS", "RAABBVI", "SADVI", "SADVI_FR")
 runtime_comp_df <-
-    filter(metadata_df, method != "DADVI") %>%
+    filter(metadata_df, method %in% comp_methods) %>%
     select(method, model, runtime, op_count, time_per_op, converged) %>%
     inner_join(dadvi_runtimes_df, by=c("model"), suffix=c("", "_dadvi")) %>%
     mutate(runtime=case_when(method == "LRVB" ~ runtime + runtime_dadvi,
@@ -337,11 +353,11 @@ runtime_comp_df <-
                               method == "LRVB_CG" ~ op_count + op_count_dadvi,
                               method == "NUTS" ~ as.numeric(NA),
                               TRUE ~ op_count)) %>%
-    inner_join(lrvb_runtimes_df, by=c("model"), suffix=c("", "_lrvb")) %>%
+    inner_join(lrvb_runtimes_df, by=c("model"), suffix=c("", "_lr")) %>%
     mutate(runtime_vs_dadvi=runtime / runtime_dadvi,
            op_count_vs_dadvi=op_count / op_count_dadvi,
-           runtime_vs_lrvb=runtime / runtime_lrvb,
-           op_count_vs_lrvb=op_count / op_count_lrvb,
+           runtime_vs_lrvb=runtime / runtime_lr,
+           op_count_vs_lrvb=op_count / op_count_lr,
            is_arm=IsARM(model))
 
 head(runtime_comp_df)
@@ -384,7 +400,7 @@ if (FALSE) {
     # Look at the big models using a different visualization
     runtime_comp_df %>%
         filter(method %in% c("NUTS", "RAABBVI", "SADVI", "LRVB", "LRVB_CG"), !is_arm) %>%
-        select(model, method, runtime, runtime_dadvi, runtime_vs_dadvi, runtime_lrvb, runtime_vs_lrvb) %>%
+        select(model, method, runtime, runtime_dadvi, runtime_vs_dadvi, runtime_lr, runtime_vs_lrvb) %>%
         arrange(model, method)
 
     ComputationComparisonGraph <- function(comp_df, col) {
@@ -396,7 +412,7 @@ if (FALSE) {
             facet_grid( ~ model)
         return(plt)
     }
-    comp_methods <- c("NUTS", "RAABBVI", "SADVI", "LRVB")
+    comp_methods <- c("NUTS", "RAABBVI", "SADVI", "SADVI_FR")
     grid.arrange(
         runtime_comp_df %>%
             filter(method %in% comp_methods, !is_arm) %>%
@@ -614,7 +630,13 @@ posteriors_df %>% pull(method) %>% unique()
 reference_method <- "NUTS"
 stopifnot(sum(posteriors_df$method == reference_method) > 0)
 
-results_df <-
+# Separately report each special LR quantity of interest for occ_det and tennis
+posteriors_df %>%
+    filter(model %in% c("tennis", "occ_det"), method == "DADVI") %>%
+    group_by(model, param) %>%
+    summarize(n=n())
+
+results_all_df <-
     inner_join(posteriors_df %>% filter(method != reference_method),
                posteriors_df %>% filter(method == reference_method),
                by=c("model", "param", "ind", "is_arm"),
@@ -624,46 +646,40 @@ results_df <-
     mutate(is_arm=IsARM(model),
            param_ind=paste0(param, ind)) %>% # Easier to count distinct parameters
     inner_join(param_df, by=c("model", "param", "is_arm")) %>%
-    filter(report_param)
+    filter(report_param) %>%
+    mutate(param=case_when(
+        (model == "tennis") & (param == "match_predictions") ~ paste(param, ind, sep="_"),
+        (model == "occ_det") & (param == "presence_prediction") ~ paste(param, ind, sep="_"),
+        TRUE ~ param
+    ))
+
+# Use LRVB_CG or LRVB as the "LR" method
+lr_methods <- c("LRVB", "LRVB_CG")
+results_lr_df <-
+    results_all_df %>%
+    filter(method %in% lr_methods) %>%
+    inner_join(lrvb_methods_df, by=c("model", "method")) %>%
+    mutate(old_method=method) %>%
+    mutate(method="LR")
+
+results_df <-
+    bind_rows(results_lr_df,
+              filter(results_all_df, !(method %in% lr_methods)))
+
+if (FALSE) {
+    # Visually inspect which methods are missing for which models
+    results_df %>%
+        group_by(model, method) %>%
+        summarize(n=1) %>%
+        pivot_wider(id_cols=model, names_from=method, values_from=n) %>%
+        View()
+}
+
 save_list[["results_df"]] <- results_df
 
 # Sanity check for bad reference values
 filter(results_df, sd_ref < 1e-6) %>%
     select(method, model, param, ind, mean, sd, mean_ref, sd_ref)
-
-
-########################################
-# What's going on with tennis?
-
-tennis_results_df <-
-    filter(results_df, model == "tennis") %>%
-    select(method, param, ind, mean, sd, mean_ref, sd_ref)
-
-tennis_results_df %>%
-    group_by(method, param) %>%
-    summarize(n=n())
-
-if (FALSE) {
-    grid.arrange(
-        ggplot(tennis_results_df %>% filter(param == "player_skills")) +
-            geom_point(aes(x=mean_ref, y=mean, color=method)) +
-            geom_abline(aes(slope=1, intercept=0)) +
-            xlab("NUTS mean")
-        ,
-        ggplot(tennis_results_df %>% filter(param == "player_skills")) +
-            geom_point(aes(x=sd_ref, y=sd, color=method)) +
-            geom_abline(aes(slope=1, intercept=0)) +
-            xlab("NUTS sd")
-        , ncol=2
-    )
-}
-
-print(tennis_results_df)
-
-tennis_results_df %>%
-    group_by(param, method) %>%
-    summarize(mean_mse=sqrt(mean(mean / sd_ref - mean_ref / sd_ref)^2),
-              sd_mse=sqrt(mean(sd / sd_ref - 1)^2))
 
 
 
@@ -673,8 +689,8 @@ tennis_results_df %>%
 results_df$method %>% unique()
 
 results_df %>%
-    filter(method=="LRVB_CG") %>%
-    select(method, param, ind, mean, sd, mean_ref, sd_ref)
+    filter(old_method=="LRVB_CG") %>%
+    select(old_method, param, ind, mean, sd, mean_ref, sd_ref)
 
 
 ########################################
@@ -712,83 +728,81 @@ GetMethodComparisonDf <- function(results_df, method1, method2, group_cols) {
 }
 
 arm_group_cols <- c("model", "param")
+
 arm_df <-
     bind_rows(
         results_df %>%
             filter(is_arm) %>%
-            GetMethodComparisonDf("LRVB", "SADVI",
-                                  group_cols=arm_group_cols),
+            GetMethodComparisonDf("DADVI", "SADVI",
+                                  group_cols=all_of(arm_group_cols)),
         results_df %>%
             filter(is_arm) %>%
-            GetMethodComparisonDf("LRVB", "RAABBVI",
-                                  group_cols=arm_group_cols),
+            GetMethodComparisonDf("DADVI", "RAABBVI",
+                                  group_cols=all_of(arm_group_cols)),
         results_df %>%
             filter(is_arm) %>%
-            GetMethodComparisonDf("LRVB", "SADVI_FR",
-                                  group_cols=arm_group_cols)
+            GetMethodComparisonDf("DADVI", "SADVI_FR",
+                                  group_cols=all_of(arm_group_cols))
     )
-#%>%    mutate(re_label=ifelse(is_re, "Random effect", "Fixed effect"))
+
+arm_lr_df <-
+    bind_rows(
+        results_df %>%
+            filter(is_arm) %>%
+            GetMethodComparisonDf("LR", "SADVI",
+                                  group_cols=all_of(arm_group_cols)),
+        results_df %>%
+            filter(is_arm) %>%
+            GetMethodComparisonDf("LR", "RAABBVI",
+                                  group_cols=all_of(arm_group_cols)),
+        results_df %>%
+            filter(is_arm) %>%
+            GetMethodComparisonDf("LR", "SADVI_FR",
+                                  group_cols=all_of(arm_group_cols))
+    )
 save_list[["arm_df"]] <- arm_df
+save_list[["arm_lr_df"]] <- arm_lr_df
 
 nonarm_group_cols <- c("model", "param")
 nonarm_df <-
     bind_rows(
         results_df %>%
             filter(!is_arm) %>%
-            GetMethodComparisonDf("LRVB", "SADVI",
-                                  group_cols=nonarm_group_cols),
+            GetMethodComparisonDf("DADVI", "SADVI",
+                                  group_cols=all_of(nonarm_group_cols)),
         results_df %>%
             filter(!is_arm) %>%
-            GetMethodComparisonDf("LRVB", "RAABBVI",
-                                  group_cols=nonarm_group_cols)
+            GetMethodComparisonDf("DADVI", "RAABBVI",
+                                  group_cols=all_of(nonarm_group_cols)),
+        results_df %>%
+            filter(!is_arm) %>%
+            GetMethodComparisonDf("DADVI", "SADVI_FR",
+                                  group_cols=all_of(nonarm_group_cols))
     )
-save_list[["nonarm_df"]] <- nonarm_df
 
-nonarm_cg_df <-
+nonarm_lr_df <-
     bind_rows(
         results_df %>%
             filter(!is_arm) %>%
-            GetMethodComparisonDf("LRVB_CG", "SADVI",
-                                  group_cols=nonarm_group_cols),
+            GetMethodComparisonDf("LR", "SADVI",
+                                  group_cols=all_of(nonarm_group_cols)),
         results_df %>%
             filter(!is_arm) %>%
-            GetMethodComparisonDf("LRVB_CG", "RAABBVI",
-                                  group_cols=nonarm_group_cols)
+            GetMethodComparisonDf("LR", "RAABBVI",
+                                  group_cols=all_of(nonarm_group_cols)),
+        results_df %>%
+            filter(!is_arm) %>%
+            GetMethodComparisonDf("LR", "SADVI_FR",
+                                  group_cols=all_of(nonarm_group_cols))
     )
-save_list[["nonarm_cg_df"]] <- nonarm_cg_df
-
-if (FALSE) {
-    # What models does DADVI do badly on?
-    threshold <- 0.4
-    dadvi_bad_models <-
-        # filter(arm_df, mean_z_rmse_1 > threshold &
-        #                mean_z_rmse_2 < threshold) %>%
-        filter(arm_df, mean_z_rmse_1 > threshold) %>%
-        pull(model) %>%
-        unique()
-
-    print(dadvi_bad_models)
-
-    filter(results_df, model %in% dadvi_bad_models) %>%
-        select(model, param, ind, method, mean, mean_ref, mean_z_err) %>%
-        arrange(model, param, ind, method) %>%
-        View()
-
-    metadata_df %>%
-        filter(model %in% dadvi_bad_models) %>%
-        arrange(model, method) %>% View()
-}
 
 
-if (FALSE) {
-    # Confirm that the SD relative errors cluster at 1 because
-    # MFVB tends to under-estimate variances
-    ggplot(results_df) +
-        geom_point(aes(x=sd_ref, y=sd)) +
-        geom_abline(aes(slope=1, intercept=0)) +
-        scale_x_log10() + scale_y_log10() +
-        facet_grid(~ method)
-}
+results_df %>%
+    filter(model == "occ_det") %>%
+    pull(param) %>% unique()
+
+save_list[["nonarm_df"]] <- nonarm_lr_df
+save_list[["nonarm_lr_df"]] <- nonarm_lr_df
 
 
 if (FALSE) {
@@ -805,12 +819,12 @@ if (FALSE) {
         ggtitle("Mean relative error (ARM)")
 
     arm_sd_plot <-
-        arm_df %>%
+        arm_lr_df %>%
         ggplot(aes(x=sd_rel_rmse_1, y=sd_rel_rmse_2)) +
         geom_density2d(size=1.5) +
         geom_point() +
         geom_abline(aes(slope=1, intercept=0)) +
-        xlab("DADVI") + ylab("Stochastic VI") +
+        xlab("LR") + ylab("Stochastic VI") +
         facet_grid(comparison ~ ., scales="fixed") +
         scale_x_log10() + scale_y_log10() +
         ggtitle("SD relative error (ARM)")
@@ -833,13 +847,13 @@ if (FALSE) {
         ggtitle("Mean relative error (non-ARM)")
 
     nonarm_sd_plot <-
-        nonarm_df %>%
+        nonarm_lr_df %>%
         ggplot(aes(x=sd_rel_rmse_1, y=sd_rel_rmse_2)) +
         #geom_density2d() +
         geom_point(aes(shape=model, color=model), size=4) +
         scale_shape(solid=TRUE) +
         geom_abline(aes(slope=1, intercept=0)) +
-        xlab("DADVI") + ylab("Stochastic VI") +
+        xlab("LR") + ylab("Stochastic VI") +
         facet_grid(comparison ~ ., scales="fixed") +
         scale_x_log10() + scale_y_log10() +
         ggtitle("SD relative error (non-ARM)")
@@ -849,17 +863,6 @@ if (FALSE) {
         ncol=2
     )
 
-    nonarm_cg_sd_plot <-
-        nonarm_cg_df %>%
-        ggplot(aes(x=sd_rel_rmse_1, y=sd_rel_rmse_2)) +
-        #geom_density2d() +
-        geom_point(aes(shape=model, color=model), size=4) +
-        scale_shape(solid=TRUE) +
-        geom_abline(aes(slope=1, intercept=0)) +
-        xlab("DADVI") + ylab("Stochastic VI") +
-        facet_grid(comparison ~ ., scales="fixed") +
-        scale_x_log10() + scale_y_log10() +
-        ggtitle("SD relative error (non-ARM)")
 
 }
 
@@ -933,4 +936,77 @@ shinyApp(ui, server)
 
 
 
+
+
+
+
+
+
+########################################
+# What's going on with tennis?
+
+tennis_results_df <-
+    filter(results_df, model == "tennis") %>%
+    select(method, param, ind, mean, sd, mean_ref, sd_ref)
+
+tennis_results_df %>%
+    group_by(method, param) %>%
+    summarize(n=n())
+
+if (FALSE) {
+    grid.arrange(
+        ggplot(tennis_results_df %>% filter(param == "player_skills")) +
+            geom_point(aes(x=mean_ref, y=mean, color=method)) +
+            geom_abline(aes(slope=1, intercept=0)) +
+            xlab("NUTS mean")
+        ,
+        ggplot(tennis_results_df %>% filter(param == "player_skills")) +
+            geom_point(aes(x=sd_ref, y=sd, color=method)) +
+            geom_abline(aes(slope=1, intercept=0)) +
+            xlab("NUTS sd")
+        , ncol=2
+    )
+}
+
+print(tennis_results_df)
+
+tennis_results_df %>%
+    group_by(param, method) %>%
+    summarize(mean_mse=sqrt(mean(mean / sd_ref - mean_ref / sd_ref)^2),
+              sd_mse=sqrt(mean(sd / sd_ref - 1)^2))
+
+
+
+if (FALSE) {
+    # What models does DADVI do badly on?
+    threshold <- 0.4
+    dadvi_bad_models <-
+        # filter(arm_df, mean_z_rmse_1 > threshold &
+        #                mean_z_rmse_2 < threshold) %>%
+        filter(arm_df, mean_z_rmse_1 > threshold) %>%
+        pull(model) %>%
+        unique()
+
+    print(dadvi_bad_models)
+
+    filter(results_df, model %in% dadvi_bad_models) %>%
+        select(model, param, ind, method, mean, mean_ref, mean_z_err) %>%
+        arrange(model, param, ind, method) %>%
+        View()
+
+    metadata_df %>%
+        filter(model %in% dadvi_bad_models) %>%
+        arrange(model, method) %>% View()
+}
+
+
+if (FALSE) {
+    # Confirm that the SD relative errors cluster at 1 because
+    # MFVB tends to under-estimate variances
+    ggplot(results_df) +
+        geom_point(aes(x=sd_ref, y=sd)) +
+        geom_abline(aes(slope=1, intercept=0)) +
+        scale_x_log10() + scale_y_log10() +
+        facet_grid(~ method)
+}
 
