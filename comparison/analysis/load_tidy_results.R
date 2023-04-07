@@ -3,29 +3,19 @@ library(tidyverse)
 library(shiny)
 
 
-# These test models shouldn't really be in there
-bad_models <- c("test", "test_rstanarm")
-non_arm_models <- c("potus", "tennis", "microcredit", "occ_det")
-
-# I think these models are just modified versions of another model.  We should
-# remove them systematically.
-repeated_models <- c(
-    "radon_group_chr", "radon_intercept_chr", "radon_no_pool_chr",
-    "wells_predicted", "mesquite_va")
-
-# These models didn't work with NUTS well enough to use here.
-mcmc_bad_models <- c("earnings_latin_square", "earnings_vary_si", "election88_full")
-
-models_to_remove <- c(bad_models, repeated_models, mcmc_bad_models) %>% unique()
-
-# This function is more convenient than always grouping and merging on is_arm
-IsARM <- function(model) { !(model %in% non_arm_models) }
 
 base_folder <- "/home/rgiordan/Documents/git_repos/DADVI/dadvi-experiments"
 paper_base_folder <- "/home/rgiordan/Documents/git_repos/DADVI/fd-advi-paper"
+analysis_folder <- file.path(base_folder, "comparison/analysis")
+
+source(file.path(analysis_folder, "load_tidy_lib.R"))
 
 input_folder <- file.path(base_folder, "comparison/blade_runs/")
 output_folder <- file.path(paper_base_folder, "experiments_data")
+
+models_to_remove <- GetModelsToRemove()
+non_arm_models <- GetNonARMModels()
+
 
 # A list of stuff to be saved for the paper
 save_list <- list()
@@ -273,6 +263,27 @@ if (FALSE) {
 #######################################################
 #######################################################
 #######################################################
+save(posteriors_df, metadata_df, param_df, lrvb_methods_df, file="/tmp/foo.Rdata")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#######################################################
+#######################################################
+#######################################################
+#######################################################
 # Compare final runtimes (not the optimization traces)
 
 
@@ -310,7 +321,8 @@ if (FALSE) {
 
 
 # The way we compute LRVB is use HVP evaluations once per dimension.
-# But we see four.  Why?
+# But we see four.  Why?  Probably because there are four blocks of the VB
+# parameters, and an HVP is on the model, not the VB objective.
 metadata_df %>%
     filter(method == "LRVB") %>%
     select(model, method, op_count, dim, num_draws) %>%
