@@ -14,10 +14,7 @@ non_arm_models <- GetNonARMModels()
 
 load("/tmp/foo.Rdata")
 
-########################################
-########################################
-########################################
-########################################
+
 ########################################
 # Posteriors compared to a reference method
 
@@ -302,5 +299,52 @@ if (FALSE) {
         summarize(n=1) %>%
         pivot_wider(id_cols=model, names_from=method, values_from=n) %>%
         View()
+}
+
+
+
+
+#########################################################################################
+# Hmm, something's up with microcredit.  The model was just defined a little strangely.
+
+
+posteriors_df %>%
+    filter(model=="microcredit", param == "beta_full", ind %in% c(3, 4, 5)) %>%
+    select(model, param, ind, mean, sd, method)
+
+
+
+
+if (FALSE) {
+    # What models does DADVI do badly on?
+    threshold <- 0.4
+    dadvi_bad_models <-
+        # filter(arm_df, mean_z_rmse_1 > threshold &
+        #                mean_z_rmse_2 < threshold) %>%
+        filter(arm_df, mean_z_rmse_1 > threshold) %>%
+        pull(model) %>%
+        unique()
+    
+    print(dadvi_bad_models)
+    
+    filter(results_df, model %in% dadvi_bad_models) %>%
+        select(model, param, ind, method, mean, mean_ref, mean_z_err) %>%
+        arrange(model, param, ind, method) %>%
+        View()
+    
+    metadata_df %>%
+        filter(model %in% dadvi_bad_models) %>%
+        arrange(model, method) %>% View()
+}
+
+
+if (FALSE) {
+    # Confirm that the SD relative errors cluster at 1 because
+    # MFVB tends to under-estimate variances
+    ggplot(results_df) +
+        geom_point(aes(x=sd_ref, y=sd)) +
+        geom_abline(aes(slope=1, intercept=0)) +
+        scale_x_log10() + scale_y_log10() +
+        facet_grid(~ method)
 }
 
