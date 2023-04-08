@@ -5,6 +5,8 @@ library(shiny)
 base_folder <- "/home/rgiordan/Documents/git_repos/DADVI/dadvi-experiments"
 paper_base_folder <- "/home/rgiordan/Documents/git_repos/DADVI/fd-advi-paper"
 analysis_folder <- file.path(base_folder, "comparison/analysis")
+
+input_folder <- file.path(base_folder, "comparison/blade_runs/")
 output_folder <- file.path(paper_base_folder, "experiments_data")
 
 source(file.path(analysis_folder, "load_tidy_lib.R"))
@@ -12,29 +14,13 @@ source(file.path(analysis_folder, "load_tidy_lib.R"))
 models_to_remove <- GetModelsToRemove()
 non_arm_models <- GetNonARMModels()
 
-load("/tmp/foo.Rdata")
-
+load(file.path(input_folder, "cleaned_experimental_results.Rdata"))
 
 
 ############################################
 # Get optimization traces
 
-valid_trace_methods <-
-    raw_trace_df %>%
-    filter(!is.na(n_calls)) %>%
-    pull(method) %>%
-    unique()
-print(valid_trace_methods)
-
-head(raw_trace_df)
-
-trace_df <-
-    filter(raw_trace_df, method %in% valid_trace_methods) %>%
-    filter(!(model %in% models_to_remove)) %>%
-    mutate(is_arm=IsARM(model))
-save_list[["trace_df"]] <- trace_df
-
-# DADVI doesn't start counting at one :(
+# Note: DADVI doesn't start counting at one operation :(
 trace_df %>%
     group_by(method) %>%
     summarize(min_n_calls=min(n_calls))
@@ -81,10 +67,6 @@ trace_norm_termination_df <-
     group_by(model, method) %>%
     filter(n_calls == max(n_calls))
 
-if (FALSE) {
-    View(trace_norm_termination_df)
-}
-
 SignedLog10 <- function(x) {
     case_when(x == 0 ~ 0,
               TRUE ~ sign(x) * log10(abs(x)))
@@ -112,43 +94,55 @@ RightLog10Transform <- scales::trans_new(
     RightLog10, RightExp10
 )
 
-save_list[["trace_norm_df"]] <- trace_norm_df
+
+PlotTraces <- function(df) {
+    trace_norm_termination_df <-
+        df %>%
+        group_by(model, method) %>%
+        filter(n_calls == max(n_calls))
+    break_steps <- 10 ^ seq(0, 9)
+    breaks <- sort(c(-break_steps, break_steps))
+    ggplot(df) +
+        geom_line(aes(x=n_calls_norm, y=obj_value_norm, color=method, group=paste0(method, model))) +
+        geom_point(aes(x=n_calls_norm, y=obj_value_norm, group=paste0(method, model)),
+                   data=trace_norm_termination_df) +
+        scale_y_continuous(trans=SignedLog10Transform, breaks=breaks) +
+        scale_x_continuous(trans=RightLog10Transform) +
+        geom_hline(aes(yintercept=0)) +
+        #geom_hline(aes(yintercept=-2), color="dark gray") + # Two DADVI KL standard deviations
+        geom_vline(aes(xintercept=1)) +
+        xlab("Number of function calls / number of DADVI function calls\n(Values > 1 are log10 transformed)") +
+        ylab("(ELBO - DADVI optimal ELBO) / DADVI optimal ELBO standard deviation \n(signed log10 transformed)")
+}
+
 
 if (FALSE) {
-    # This is the one!
-    
-    PlotTraces <- function(df) {
-        trace_norm_termination_df <-
-            df %>%
-            group_by(model, method) %>%
-            filter(n_calls == max(n_calls))
-        break_steps <- 10 ^ seq(0, 9)
-        breaks <- sort(c(-break_steps, break_steps))
-        ggplot(df) +
-            geom_line(aes(x=n_calls_norm, y=obj_value_norm, color=method, group=paste0(method, model))) +
-            geom_point(aes(x=n_calls_norm, y=obj_value_norm, group=paste0(method, model)),
-                       data=trace_norm_termination_df) +
-            scale_y_continuous(trans=SignedLog10Transform, breaks=breaks) +
-            scale_x_continuous(trans=RightLog10Transform) +
-            #scale_x_log10() +
-            geom_hline(aes(yintercept=0)) +
-            #geom_hline(aes(yintercept=-2), color="dark gray") + # Two DADVI KL standard deviations
-            geom_vline(aes(xintercept=1)) +
-            xlab("Number of function calls / number of DADVI function calls\n(Values > 1 are log10 transformed)") +
-            ylab("(ELBO - DADVI optimal ELBO) / DADVI optimal ELBO standard deviation \n(signed log10 transformed)")
-    }
-    
     PlotTraces(trace_norm_df %>% filter(is_arm)) +
         ggtitle("Standardized optimization traces for ARM") +
         facet_grid(method ~ .)
     
-    trace_norm_df %>% filter(!is_arm) %>% mutate(model=as.character(model)) %>% pull(model) %>% class()
     PlotTraces(trace_norm_df %>% filter(!is_arm))  +
         ggtitle("Standardized optimization traces for non-ARM") +
         facet_grid(method ~ model)
     
 }
 
+
+save(trace_norm_df, trace_norm_termination_df, file=file.path(output_folder, "traces.Rdata"))
+
+
+
+
+
+
+
+
+
+
+#################################################################################################
+# Sanity checking and exploration
+
+stop()
 
 if (FALSE) {
     # Look at single model / method traces

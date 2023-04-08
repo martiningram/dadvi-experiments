@@ -5,6 +5,8 @@ library(shiny)
 base_folder <- "/home/rgiordan/Documents/git_repos/DADVI/dadvi-experiments"
 paper_base_folder <- "/home/rgiordan/Documents/git_repos/DADVI/fd-advi-paper"
 analysis_folder <- file.path(base_folder, "comparison/analysis")
+
+input_folder <- file.path(base_folder, "comparison/blade_runs/")
 output_folder <- file.path(paper_base_folder, "experiments_data")
 
 source(file.path(analysis_folder, "load_tidy_lib.R"))
@@ -12,7 +14,7 @@ source(file.path(analysis_folder, "load_tidy_lib.R"))
 models_to_remove <- GetModelsToRemove()
 non_arm_models <- GetNonARMModels()
 
-load("/tmp/foo.Rdata")
+load(file.path(input_folder, "cleaned_experimental_results.Rdata"))
 
 
 ########################################
@@ -21,22 +23,24 @@ load("/tmp/foo.Rdata")
 reference_method <- "NUTS"
 stopifnot(sum(posteriors_df$method == reference_method) > 0)
 
+# Note that we only have CG results for the match_predictions and presence_prediction.
+any(is.na(posteriors_df$is_unconstrained))
 results_all_df <-
     inner_join(posteriors_df %>% filter(method != reference_method),
                posteriors_df %>% filter(method == reference_method),
-               by=c("model", "param", "ind", "is_arm"),
+               by=c("model", "param", "ind", "is_arm", "is_unconstrained"),
                suffix=c("", "_ref")) %>%
-    mutate(mean_z_err=(mean - mean_ref) / sd_ref,
-           sd_rel_err=(sd - sd_ref) / sd_ref) %>%
-    mutate(is_arm=IsARM(model),
-           param_ind=paste0(param, ind)) %>% # This makes it easier to count distinct parameters
-    inner_join(param_df, by=c("model", "param", "is_arm")) %>%
-    filter(report_param) %>%
     mutate(param=case_when(
         (model == "tennis") & (param == "match_predictions") ~ paste(param, ind, sep="_"),
         (model == "occ_det") & (param == "presence_prediction") ~ paste(param, ind, sep="_"),
         TRUE ~ param
-    )) # For certain parameters, treat each index as a "parameter" for purposes of reporting accuracy
+    )) %>% # For certain parameters, treat each index as a "parameter" for purposes of reporting accuracy
+    mutate(mean_z_err=(mean - mean_ref) / sd_ref,
+           sd_rel_err=(sd - sd_ref) / sd_ref) %>%
+    mutate(is_arm=IsARM(model),
+           param_ind=paste0(param, ind)) # This makes it easier to count distinct parameters
+    # filter(report_param) %>%
+    # filter(is_unconstrained) # Can't only report unconstrained and also have the LRVB_CG results
 
 # Use LRVB_CG or LRVB as the "LR" method according to lrvb_methods_df
 lr_methods <- c("LRVB", "LRVB_CG")
@@ -51,13 +55,20 @@ results_df <-
     bind_rows(results_lr_df,
               filter(results_all_df, !(method %in% lr_methods)))
 
-save_list[["results_df"]] <- results_df
-
 # Sanity check for bad reference values
 filter(results_df, sd_ref < 1e-6) %>%
     select(method, model, param, ind, mean, sd, mean_ref, sd_ref)
 
-
+# # Everything needs an LR method
+# filter(results_df, method == "LR") %>% filter(!is_arm) %>% pull(model) %>% unique()
+# 
+# filter(posteriors_df) %>% filter(!is_arm) %>% select(model, method) %>% unique() %>% filter(method %in% lr_methods)
+# filter(results_df) %>% filter(!is_arm) %>% select(model, method) %>% unique()
+# 
+# filter(lrvb_methods_df, model %in% non_arm_models) %>%  select(model, method) %>% unique()
+# filter(posteriors_df, model %in% non_arm_models) %>%  select(model, method) %>% unique() %>% filter(method %in% lr_methods)
+# filter(results_lr_df, model %in% non_arm_models) %>%  select(model, method) %>% unique()
+# filter(results_all_df, model %in% non_arm_models) %>%  select(model, method) %>% unique() %>% filter(method %in% lr_methods)
 
 ########################################
 # Aggregate and compare posterior results
@@ -110,87 +121,87 @@ GetMethodComparisonsDf <- function(results_df, dadvi_methods, comp_methods, grou
 }    
 
 
-posterior_comp_df <-  results_df %>%
+posterior_comp_df <- results_df %>%
     GetMethodComparisonsDf(c("DADVI", "LR"), 
                            c("SADVI", "RAABBVI", "SADVI_FR"), 
                            c("model", "param", "is_arm"))
 
 
+PlotPostComparison <- function(comp_df, col1, col2, model_label=FALSE, same_lims=TRUE, plot_dens=TRUE) {
+    lims <- max(pull(comp_df, {{col1}}), pull(comp_df, {{col2}}))
+    
+    if (model_label) {
+        plt <-
+            comp_df %>%
+            ggplot(aes(x={{col1}}, y={{col2}})) +
+            geom_point(aes(color=model, shape=model), size=4) +
+            scale_shape(solid=TRUE)
+    } else {
+        plt <-
+            comp_df %>%
+            ggplot(aes(x={{col1}}, y={{col2}})) +
+            geom_point()
+    }
+    plt <- plt +
+        geom_abline(aes(slope=1, intercept=0)) +
+        facet_grid(comparison ~ ., scales="fixed") +
+        scale_x_log10() + scale_y_log10()
+    
+    if (plot_dens) {
+        plt <- plt + geom_density2d(size=1.5)
+    }
+    
+    if (same_lims) {
+        plt <- plt + expand_limits(x=lims, y=lims)
+    }
+    return(plt)
+}
+
+
+arm_mean_plot <-
+    posterior_comp_df %>%
+    filter(is_arm, method_1 == "DADVI") %>%
+    PlotPostComparison(mean_z_rmse_1, mean_z_rmse_2) +
+    xlab("DADVI") + ylab("Stochastic VI") +
+    ggtitle("Mean relative error (ARM)")
+
+arm_sd_plot <-
+    posterior_comp_df %>%
+    filter(is_arm, method_1 == "LR") %>%
+    PlotPostComparison(sd_rel_rmse_1, sd_rel_rmse_2) +
+    xlab("LR") + ylab("Stochastic VI") +
+    ggtitle("SD relative error (ARM)")
+
 if (FALSE) {
-    # The ARM graph we want
-    arm_mean_plot <-
-        posterior_comp_df %>%
-        filter(is_arm, method_1 == "DADVI") %>%
-        ggplot(aes(x=mean_z_rmse_1, y=mean_z_rmse_2)) +
-        geom_density2d(size=1.5) +
-        geom_point() +
-        geom_abline(aes(slope=1, intercept=0)) +
-        xlab("DADVI") + ylab("Stochastic VI") +
-        facet_grid(comparison ~ ., scales="fixed") +
-        scale_x_log10() + scale_y_log10() +
-        ggtitle("Mean relative error (ARM)")
-
-    arm_sd_plot <-
-        posterior_comp_df %>%
-        filter(is_arm, method_1 == "LR") %>%
-        ggplot(aes(x=sd_rel_rmse_1, y=sd_rel_rmse_2)) +
-        geom_density2d(size=1.5) +
-        geom_point() +
-        geom_abline(aes(slope=1, intercept=0)) +
-        xlab("LR") + ylab("Stochastic VI") +
-        facet_grid(comparison ~ ., scales="fixed") +
-        scale_x_log10() + scale_y_log10() +
-        ggtitle("SD relative error (ARM)")
-
     grid.arrange(
         arm_mean_plot, arm_sd_plot,
         ncol=2
     )
+}
 
-    nonarm_mean_plot <-
-        posterior_comp_df %>%
-        filter(!is_arm, method_1 == "DADVI") %>%
-        ggplot(aes(x=mean_z_rmse_1, y=mean_z_rmse_2)) +
-        geom_point(aes(shape=model, color=model), size=4) +
-        scale_shape(solid=TRUE) +
-        geom_abline(aes(slope=1, intercept=0)) +
-        xlab("DADVI") + ylab("Stochastic VI") +
-        facet_grid(comparison ~ ., scales="fixed") +
-        scale_x_log10() + scale_y_log10() +
-        ggtitle("Mean relative error (non-ARM)")
+nonarm_mean_plot <-
+    posterior_comp_df %>%
+    filter(!is_arm, method_1 == "DADVI") %>%
+    PlotPostComparison(mean_z_rmse_1, mean_z_rmse_2, plot_dens=FALSE, model_label=TRUE) +
+    xlab("DADVI") + ylab("Stochastic VI") +
+    ggtitle("Mean relative error (non-ARM)")
 
-    nonarm_sd_plot <-
-        posterior_comp_df %>%
-        filter(!is_arm, method_1 == "LR") %>%
-        ggplot(aes(x=sd_rel_rmse_1, y=sd_rel_rmse_2)) +
-        geom_point(aes(shape=model, color=model), size=4) +
-        scale_shape(solid=TRUE) +
-        geom_abline(aes(slope=1, intercept=0)) +
-        xlab("LR") + ylab("Stochastic VI") +
-        facet_grid(comparison ~ ., scales="fixed") +
-        scale_x_log10() + scale_y_log10() +
-        ggtitle("SD relative error (non-ARM)")
+nonarm_sd_plot <-
+    posterior_comp_df %>%
+    filter(!is_arm, method_1 == "LR") %>%
+    PlotPostComparison(sd_rel_rmse_1, sd_rel_rmse_2, plot_dens=FALSE, model_label=TRUE) +
+    xlab("LR") + ylab("Stochastic VI") +
+    ggtitle("SD relative error (non-ARM)")
 
+if (FALSE) {
     grid.arrange(
         nonarm_mean_plot, nonarm_sd_plot,
         ncol=2
     )
-
-
 }
 
 
-##################################################################################
-# Save.  For now let's only do this manually to avoid overwriting accidentally
-
-if (FALSE) {
-    output_file <- file.path(output_folder, "posterior_summary.Rdata")
-    print(output_file)
-    save(save_list, file=output_file)
-}
-
-
-
+save(posterior_comp_df, file=file.path(output_folder, "posteriors.Rdata"))
 
 
 
