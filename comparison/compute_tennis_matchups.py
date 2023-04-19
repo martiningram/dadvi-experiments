@@ -31,7 +31,6 @@ def compute_distribution_from_draws(draws, function):
 
 if __name__ == '__main__':
 
-
     EXPERIMENT_BASE_DIR = '/home/martin.ingram/experiment_runs/march_2023'
     TENNIS_PICKLE_FILE = "/home/martin.ingram/experiment_runs/march_2023/dadvi_results/dadvi_info/tennis.pkl"
     tennis_res = pickle.load(open(TENNIS_PICKLE_FILE, "rb"))
