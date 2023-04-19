@@ -1,30 +1,23 @@
 import numpy as np
 import pickle
 import os
+import json
 from time import time
 from functools import partial
 from glob import glob
 from jax.config import config
 from jax import vmap
 from collections import defaultdict
+from jax.scipy.special import expit
 
 config.update("jax_enable_x64", True)
 
-from utils import get_occ_det_model_from_pickle
-from config import OCC_DET_PICKLE_PATH
+from utils import get_potus_model
+from config import POTUS_JSON_PATH
 from dadvi.jax import build_dadvi_funs
 from dadvi.pymc.pymc_to_jax import get_jax_functions_from_pymc
 from dadvi.pymc.jax_api import DADVIResult
 from utils import get_run_datetime_and_hostname
-
-
-def pres_prob(params, sample_loc, species_id):
-
-    logit_prob = (
-        sample_loc @ params["w_env"][species_id] + params["intercept"][species_id][0]
-    )
-
-    return logit_prob
 
 
 def compute_distribution_from_draws(draws, function):
@@ -41,13 +34,36 @@ def compute_distribution_from_draws(draws, function):
     return results
 
 
-OCCU_DADVI_PATH = "/home/martin.ingram/experiment_runs/march_2023/dadvi_results/dadvi_info/occ_det.pkl"
+POTUS_DADVI_PATH = "/home/martin.ingram/experiment_runs/march_2023/dadvi_results/dadvi_info/potus.pkl"
 EXPERIMENT_BASE_DIR = '/home/martin.ingram/experiment_runs/march_2023'
 
 # Load occ_det results
-occ_res = pickle.load(open(OCCU_DADVI_PATH, "rb"))
-model = get_occ_det_model_from_pickle(OCC_DET_PICKLE_PATH)
-occ_pickle = pickle.load(open(OCC_DET_PICKLE_PATH, "rb"))
+occ_res = pickle.load(open(POTUS_DADVI_PATH, "rb"))
+model = get_potus_model(POTUS_JSON_PATH)
+potus_data = json.load(open(POTUS_JSON_PATH))
+np_data = {x: np.squeeze(np.array(y)) for x, y in potus_data.items()}
+
+national_cov_matrix_error_sd = np.sqrt(
+        np.squeeze(
+            np_data["state_weights"].reshape(1, -1)
+            @ (np_data["state_covariance_0"] @ np_data["state_weights"].reshape(-1, 1))
+        )
+    )
+ss_cov_mu_b_T = (
+    np_data["state_covariance_0"]
+    * (np_data["mu_b_T_scale"] / national_cov_matrix_error_sd) ** 2
+)
+cholesky_ss_cov_mu_b_T = np.linalg.cholesky(ss_cov_mu_b_T)
+
+
+def compute_final_vote_share(params):
+
+    rel_means = params['raw_mu_b_T']
+
+    mean_shares = cholesky_ss_cov_mu_b_T @ rel_means + np_data["mu_b_prior"]
+
+    return expit(mean_shares) @ np_data['state_weights']
+
 
 # Get the JAX functions
 jax_funs = get_jax_functions_from_pymc(model)
@@ -60,13 +76,8 @@ dadvi_res = DADVIResult(
     dadvi_funs=dadvi_funs,
 )
 
-np.random.seed(2)
-species_chosen = np.random.choice(occ_pickle["y_df"].shape[1], size=20, replace=False)
-
-sample_loc = occ_pickle["X_env_mat"][200]
-
 draw_files = glob(
-   f"{EXPERIMENT_BASE_DIR}/*/draw_dicts/occ_det.npz"
+   f"{EXPERIMENT_BASE_DIR}/*/draw_dicts/potus.npz"
 )
 
 full_res = defaultdict(list)
@@ -74,39 +85,35 @@ full_res = defaultdict(list)
 total_runtime = 0.
 total_hvp = 0
 
-for species_id in species_chosen:
+cur_fun = compute_final_vote_share
 
-    print(species_id)
-
-    cur_fun = partial(pres_prob, species_id=species_id, sample_loc=sample_loc)
-
-    cur_start_time = time()
-    cur_res = (
-        dadvi_res.get_frequentist_sd_and_lrvb_correction_of_scalar_valued_function(
-            cur_fun
-        )
+cur_start_time = time()
+cur_res = (
+    dadvi_res.get_frequentist_sd_and_lrvb_correction_of_scalar_valued_function(
+        cur_fun
     )
-    cur_end_time = time()
-    total_runtime += (cur_end_time - cur_start_time)
-    total_hvp += cur_res['n_hvp_calls']
+)
+cur_end_time = time()
+total_runtime += (cur_end_time - cur_start_time)
+total_hvp += cur_res['n_hvp_calls']
 
-    cur_draws = np.random.normal(
-        loc=cur_res["mean"], scale=cur_res["lrvb_sd"], size=1000
-    )
+cur_draws = np.random.normal(
+    loc=cur_res["mean"], scale=cur_res["lrvb_sd"], size=1000
+)
 
-    full_res["lrvb_cg"].append(cur_draws.reshape(1, -1))
+full_res["lrvb_cg"].append(cur_draws.reshape(1, -1))
 
-    for cur_file in draw_files:
+for cur_file in draw_files:
 
-        short_name = "_".join(cur_file.split("/")[-3].split("_")[:-1])
+    short_name = "_".join(cur_file.split("/")[-3].split("_")[:-1])
 
-        # Skip if lrvb_cg -- recomputing
-        if short_name == 'lrvb_cg':
-            continue
+    # Skip if lrvb_cg -- recomputing
+    if short_name == 'lrvb_cg':
+        continue
 
-        cur_loaded = dict(np.load(cur_file))
-        cur_result = compute_distribution_from_draws(cur_loaded, cur_fun)
-        full_res[short_name].append(cur_result)
+    cur_loaded = dict(np.load(cur_file))
+    cur_result = compute_distribution_from_draws(cur_loaded, cur_fun)
+    full_res[short_name].append(cur_result)
 
 full_res = {x: np.stack(y, axis=-1) for x, y in full_res.items()}
 
@@ -120,7 +127,7 @@ for cur_file in draw_files:
 
     cur_loaded = dict(np.load(cur_file))
     cur_result = full_res[short_name]
-    cur_loaded["presence_prediction"] = cur_result
+    cur_loaded["final_vote_share"] = cur_result
     np.savez(cur_file, **cur_loaded)
 
 target_folder = (
@@ -129,7 +136,7 @@ target_folder = (
 
 os.makedirs(target_folder, exist_ok=True)
 np.savez(
-    os.path.join(target_folder, "occ_det.npz"), presence_prediction=full_res["lrvb_cg"]
+    os.path.join(target_folder, "potus.npz"), final_vote_share=full_res["lrvb_cg"]
 )
 
 # Save the runtime etc also
@@ -145,7 +152,7 @@ target_folder = (
 
 os.makedirs(target_folder, exist_ok=True)
 
-target_file = os.path.join(target_folder, f"occ_det.pkl")
+target_file = os.path.join(target_folder, f"potus.pkl")
 
 with open(target_file, "wb") as f:
     pickle.dump(runtime_cost, f)
