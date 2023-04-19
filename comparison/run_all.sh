@@ -1,8 +1,8 @@
 TARGET_DIR='/home/martin.ingram/experiment_runs/march_2023/'
-COVERAGE_TARGET_DIR='/media/martin/External Drive/projects/lrvb_paper/coverage_warm_starts_rerun'
+COVERAGE_TARGET_DIR='/home/martin.ingram/experiment_runs/march_2023_coverage/'
 
 # for MODEL_NAME in microcredit occ_det tennis potus; do
-for MODEL_NAME in tennis; do
+for MODEL_NAME in tennis occ_det potus; do
 
         echo "$MODEL_NAME"
 
@@ -15,12 +15,11 @@ for MODEL_NAME in tennis; do
 	# echo "Running SADVI mean field"
 	# python fit_pymc_sadvi.py "$MODEL_NAME" "$TARGET_DIR" advi
 
-	echo "Running RAABBVI"
-	python fit_raabbvi.py "$MODEL_NAME" "$TARGET_DIR"
+	# echo "Running RAABBVI"
+	# python fit_raabbvi.py "$MODEL_NAME" "$TARGET_DIR"
 
-	if [ $MODEL_NAME != 'potus' ]
-	then
-		echo "Hi there"
+	# if [ $MODEL_NAME != 'potus' ]
+	# then
 		# echo "Running bigger models also."
 
 		# echo "Running doubling DADVI"
@@ -31,18 +30,20 @@ for MODEL_NAME in tennis; do
 
 		# echo "Running PyMC SADVI Full rank"
 		# python fit_pymc_sadvi.py "$MODEL_NAME" "$TARGET_DIR" fullrank_advi
-	fi
+	# fi
 
         # Run coverage
-	# for min_m_power in 3 4 5 6; do
+	for M in 8 16 32 64; do
 
-	# 	python run_multiple_dadvi.py \
-	# 		--model-name "$MODEL_NAME" \
-	# 		--target-dir "$COVERAGE_TARGET_DIR" \
-	# 		--min-m-power $min_m_power \
-	# 		--n-reruns 10 \
-	# 		--warm-start
+		echo "Running with $M fixed draws"
 
-	# done;
+		python run_multiple_dadvi_no_doubling.py \
+			--model-name "$MODEL_NAME" \
+			--target-dir "$COVERAGE_TARGET_DIR" \
+			--M $M \
+			--n-reruns 100 \
+			--warm-start
+
+	done;
 
 done
