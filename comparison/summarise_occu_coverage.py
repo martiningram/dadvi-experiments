@@ -20,10 +20,12 @@ jax_funs = get_jax_functions_from_pymc(model)
 dadvi_funs = build_dadvi_funs(jax_funs["log_posterior_fun"])
 
 reruns = glob(
-    "/Users/martin.ingram/Projects/PhD/dadvi_experiments/comparison/big_model_coverage/march_2023_coverage/*/occ_det/*.pkl"
+    # "/Users/martin.ingram/Projects/PhD/dadvi_experiments/comparison/big_model_coverage/march_2023_coverage/*/occ_det/*.pkl"
+    "/home/martin.ingram/experiment_runs/march_2023_coverage/*/occ_det/*.pkl"
 )
 
-target_dir = "./big_model_coverage/summaries/occ_det/"
+# target_dir = "./big_model_coverage/summaries/occ_det/"
+target_dir = "/home/martin.ingram/experiment_runs/coverage_summaries_big_models"
 
 
 def pres_prob(params, sample_loc, species_id):
@@ -60,6 +62,7 @@ def compute_quantities(occu_res, dadvi_res):
     results = list()
 
     for species_id in species_chosen:
+        print(species_id)
         cur_fun = partial(pres_prob, species_id=species_id, sample_loc=sample_loc)
 
         lrvb_res = (

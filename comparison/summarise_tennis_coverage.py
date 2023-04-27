@@ -18,10 +18,11 @@ dadvi_funs = build_dadvi_funs(jax_funs["log_posterior_fun"])
 encoder = tennis_model["encoder"]
 
 reruns = glob(
-    "/Users/martin.ingram/Projects/PhD/dadvi_experiments/comparison/big_model_coverage/march_2023_coverage/*/tennis/*.pkl"
+    # "/Users/martin.ingram/Projects/PhD/dadvi_experiments/comparison/big_model_coverage/march_2023_coverage/*/tennis/*.pkl"
+    "/home/martin.ingram/experiment_runs/march_2023_coverage/*/tennis/*.pkl"
 )
 
-target_dir = "./big_model_coverage/summaries/tennis/"
+target_dir = "/home/martin.ingram/experiment_runs/coverage_summaries_big_models"
 
 np.random.seed(2)
 p1_choices = np.random.choice(encoder.classes_, size=20, replace=False)
@@ -53,6 +54,9 @@ def compute_quantities(tennis_res, dadvi_res):
     results = list()
 
     for cur_p1, cur_p2 in pairs:
+
+        print(cur_p1, cur_p2)
+
         p1_id, p2_id = encoder.transform([cur_p1, cur_p2])
 
         lrvb_differences = (
@@ -86,7 +90,8 @@ def compute_quantities(tennis_res, dadvi_res):
 
 full_results = list()
 
-for cur_rerun in tqdm(reruns):
+for i, cur_rerun in tqdm(enumerate(reruns)):
+    print(f'Rerun {i}')
     tennis_res, dadvi_res = build_dadvi_res(cur_rerun)
     quantities = compute_quantities(tennis_res, dadvi_res)
     quantities["filename"] = cur_rerun

@@ -1,5 +1,6 @@
 import os
 import pickle
+import json
 from dadvi.pymc.pymc_to_jax import get_jax_functions_from_pymc
 from dadvi.jax import build_dadvi_funs
 from dadvi.pymc.jax_api import DADVIResult
@@ -33,10 +34,12 @@ jax_funs = get_jax_functions_from_pymc(model)
 dadvi_funs = build_dadvi_funs(jax_funs["log_posterior_fun"])
 
 reruns = glob(
-    "/Users/martin.ingram/Projects/PhD/dadvi_experiments/comparison/big_model_coverage/march_2023_coverage/*/potus/*.pkl"
+    # "/Users/martin.ingram/Projects/PhD/dadvi_experiments/comparison/big_model_coverage/march_2023_coverage/*/potus/*.pkl"
+    "/home/martin.ingram/experiment_runs/march_2023_coverage/*/potus/*.pkl"
 )
 
-target_dir = "./big_model_coverage/summaries/potus/"
+# target_dir = "./big_model_coverage/summaries/potus/"
+target_dir = "/home/martin.ingram/experiment_runs/coverage_summaries_big_models"
 
 
 def compute_final_vote_share(params):
@@ -96,8 +99,17 @@ def compute_quantities(occu_res, dadvi_res):
 full_results = list()
 
 for cur_rerun in tqdm(reruns):
+    print(cur_rerun)
     potus_res, dadvi_res = build_dadvi_res(cur_rerun)
-    quantities = compute_quantities(potus_res, dadvi_res)
+
+    if potus_res['z'].shape[0] < 10:
+        continue
+
+    try:
+        quantities = compute_quantities(potus_res, dadvi_res)
+    except Exception:
+        print(f'Failed to compute {cur_rerun}. Skipping.')
+        continue
     quantities["filename"] = cur_rerun
 
     full_results.append(quantities)
