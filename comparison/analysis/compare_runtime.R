@@ -6,7 +6,6 @@ base_folder <- "/home/rgiordan/Documents/git_repos/DADVI/dadvi-experiments"
 paper_base_folder <- "/home/rgiordan/Documents/git_repos/DADVI/fd-advi-paper"
 analysis_folder <- file.path(base_folder, "comparison/analysis")
 
-input_folder <- file.path(base_folder, "comparison/blade_runs/")
 output_folder <- file.path(paper_base_folder, "experiments_data")
 
 source(file.path(analysis_folder, "load_tidy_lib.R"))
@@ -14,7 +13,7 @@ source(file.path(analysis_folder, "load_tidy_lib.R"))
 models_to_remove <- GetModelsToRemove()
 non_arm_models <- GetNonARMModels()
 
-load(file.path(input_folder, "cleaned_experimental_results.Rdata"))
+load(file.path(output_folder, "cleaned_experimental_results.Rdata"))
 
 
 #######################################################
@@ -99,7 +98,7 @@ if (FALSE) {
 }
 
 # Look at the big models using a different visualization
-ComputationComparisonGraph <- function(comp_df, col) {
+ComputationComparisonBarGraph <- function(comp_df, col) {
     plt <- ggplot(comp_df) +
         geom_bar(aes(x=method, group=model, fill=method,
                      y={{col}}), stat="Identity") +
@@ -112,13 +111,13 @@ ComputationComparisonGraph <- function(comp_df, col) {
 if (FALSE) {
     grid.arrange(
         runtime_comp_df %>% filter(!is_arm) %>%
-            ComputationComparisonGraph(runtime_vs_dadvi),
+            ComputationComparisonBarGraph(runtime_vs_dadvi),
         runtime_comp_df %>% filter(!is_arm) %>%
-            ComputationComparisonGraph(op_count_vs_dadvi),
+            ComputationComparisonBarGraph(op_count_vs_dadvi),
         runtime_comp_df %>% filter(!is_arm) %>%
-            ComputationComparisonGraph(runtime_vs_lrvb),
+            ComputationComparisonBarGraph(runtime_vs_lrvb),
         runtime_comp_df %>% filter(!is_arm) %>%
-            ComputationComparisonGraph(op_count_vs_lrvb),
+            ComputationComparisonBarGraph(op_count_vs_lrvb),
         ncol=2)
 }
 

@@ -3,34 +3,27 @@ library(tidyverse)
 
 base_folder <- "/home/rgiordan/Documents/git_repos/DADVI/dadvi-experiments"
 paper_base_folder <- "/home/rgiordan/Documents/git_repos/DADVI/fd-advi-paper"
+analysis_folder <- file.path(base_folder, "comparison/analysis")
+
+source(file.path(analysis_folder, "load_tidy_lib.R"))
 
 input_folder <- file.path(base_folder, "comparison/analysis/coverage_warm_starts_rerun/") 
 output_folder <- file.path(paper_base_folder, "experiments_data") 
 
+models_to_remove <- GetModelsToRemove()
+non_arm_models <- GetNonARMModels()
 
-raw_coverage_df <- read.csv(file.path(input_folder, "coverage_tidy.csv"), as.is=TRUE)
-
-# We don't really postprocess the metadata
-metadata_df <- raw_metadata_df
-
-raw_coverage_df$model %>% unique()
-
-# These test models shouldn't really be in there
-bad_models <- c("test", "test_rstanarm")
-non_arm_models <- c("potus", "tennis", "microcredit", "occ_det")
-
-# These models are just modified versions of another model.  We should
-# probably sort these out systematically.
-repeated_models <- c(
-    "radon_group_chr", "radon_intercept_chr", "radon_no_pool_chr",
-    "wells_predicted", "mesquite_va")
-
-# These models didn't work with NUTS well enough to use here.
-mcmc_bad_models <- c("earnings_latin_square", "earnings_vary_si", "election88_full")
+raw_coverage_df <-
+    read.csv(file.path(input_folder, "coverage_tidy.csv"), as.is=TRUE) %>%
+    filter(!(model %in% models_to_remove)) %>%
+    mutate(is_arm=IsARM(model))
 
 
-# This function is more convenient than always grouping and merging on is_arm
-IsARM <- function(model) { !(model %in% non_arm_models) }
+# POTUS is missing
+filter(raw_coverage_df, !is_arm) %>%
+    pull(model) %>%
+    unique()
+
 
 REF_SEED <- "reference"
 stopifnot(sum(raw_coverage_df$seed == REF_SEED) > 0)
@@ -47,58 +40,31 @@ save_list <- list()
 
 
 
-if (TRUE) {
-    # Compare the the average within the set of runs
-    tmp_df <- 
-        raw_coverage_df %>%
-        filter(!(model %in% bad_models)) %>%
-        filter(!(model %in% repeated_models)) %>%
-        filter(!(model %in% mcmc_bad_models)) %>%
-        mutate(is_arm=IsARM(model))
+# Compare to the average within the runs with the max number of draws.
+truth_df <-     
+    raw_coverage_df %>%
+    filter(num_draws==max(num_draws)) %>%
+    group_by(param, model, num_draws) %>%
+    summarize(mean_all=mean(mean),
+              n_runs=n(),
+              freq_sd_all=sqrt(mean(freq_sd^2) / n_runs),
+              .groups="drop")
 
-    truth_df <-     
-        tmp_df %>%
-        filter(num_draws==max(num_draws)) %>%
-        group_by(param, model, num_draws) %>%
-        summarize(mean_all=mean(mean),
-                  n_runs=n(),
-                  freq_sd_all=sqrt(mean(freq_sd^2) / n_runs),
-                  .groups="drop")
-    coverage_df <-
-        inner_join(tmp_df,
-                   truth_df %>% 
-                       select(param, model, mean_all, freq_sd_all, n_runs),
-                   by=c("param", "model")) %>%
-        mutate(z_score=(mean - mean_all) / freq_sd,
-               p_val=pnorm(z_score),
-               sd_ratio=freq_sd / freq_sd_all)
-    
-    unique(coverage_df$model) %>% sort()
-    coverage_df$p_val %>% length() / coverage_df$p_val %>% unique() %>% length()
-    # Check whether the sampling variability of the average is negligible.
-    summary(coverage_df %>% filter(num_draws < max(num_draws)) %>% pull(sd_ratio))
+coverage_df <-
+    inner_join(raw_coverage_df,
+               truth_df %>% 
+                   select(param, model, mean_all, freq_sd_all, n_runs),
+               by=c("param", "model")) %>%
+    mutate(z_score=(mean - mean_all) / freq_sd,
+           p_val=pnorm(z_score),
+           sd_ratio=freq_sd / freq_sd_all)
 
-} else {
-    # Alternatively use a reference value
-    reference_seed <- REF_SEED
-    tmp_df <-
-        raw_coverage_df %>%
-        filter(!(model %in% bad_models)) %>%
-        select(seed, param, model, num_draws, mean, freq_sd)
-    coverage_df <-
-        inner_join(filter(tmp_df, seed != reference_seed),
-                   filter(tmp_df, seed == reference_seed),
-                   by=c("param", "model", "num_draws"),
-                   suffix=c("", "_ref")) %>%
-        mutate(freq_diff_sd=sqrt(freq_sd^2 + freq_sd_ref^2),
-               z_score=(mean - mean_ref) / freq_diff_sd,
-               p_val=pnorm(z_score),
-               is_arm=IsARM(model))
-    rm(tmp_df)
-}
+unique(coverage_df$model) %>% sort()
+coverage_df$p_val %>% length() / coverage_df$p_val %>% unique() %>% length()
 
-# TODO: probably you should use the 64-draw runs as reference values for
-# the other ones.  Once we get to 32 everything is okay anyway.
+# Check whether the sampling variability of the average is negligible.
+summary(coverage_df %>% filter(num_draws < max(num_draws)) %>% pull(sd_ratio))
+
 
 # A single model column that groups the ARM models will be convenient
 coverage_df <-

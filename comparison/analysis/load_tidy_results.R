@@ -62,14 +62,15 @@ IsRE <- function(model, is_arm, param, dimension) {
 }
 
 param_df <-
-    posteriors_df %>%
+    raw_posteriors_df %>%
     filter(method == "DADVI") %>%
     left_join(raw_param_df %>%
                   rename(param=unconstrained_params) %>%
                   mutate(status="unconstrainted") %>%
                   select(model, param, status),
               by=c("model", "param")) %>%
-    mutate(is_unconstrained=!is.na(status)) %>%
+    mutate(is_unconstrained=!is.na(status),
+           is_arm=IsARM(model)) %>%
     select(model, is_arm, param, is_unconstrained, -status) %>%
     group_by(model, is_arm, param, is_unconstrained) %>%
     summarize(dimension=n(), .groups="drop") %>%
@@ -349,5 +350,5 @@ if (FALSE) {
 # Save
 
 save(posteriors_df, metadata_df, param_df, lrvb_methods_df, trace_df,
-     file=file.path(input_folder, "cleaned_experimental_results.Rdata"))
+     file=file.path(output_folder, "cleaned_experimental_results.Rdata"))
 

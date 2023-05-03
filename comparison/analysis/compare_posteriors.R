@@ -6,7 +6,6 @@ base_folder <- "/home/rgiordan/Documents/git_repos/DADVI/dadvi-experiments"
 paper_base_folder <- "/home/rgiordan/Documents/git_repos/DADVI/fd-advi-paper"
 analysis_folder <- file.path(base_folder, "comparison/analysis")
 
-input_folder <- file.path(base_folder, "comparison/blade_runs/")
 output_folder <- file.path(paper_base_folder, "experiments_data")
 
 source(file.path(analysis_folder, "load_tidy_lib.R"))
@@ -14,7 +13,7 @@ source(file.path(analysis_folder, "load_tidy_lib.R"))
 models_to_remove <- GetModelsToRemove()
 non_arm_models <- GetNonARMModels()
 
-load(file.path(input_folder, "cleaned_experimental_results.Rdata"))
+load(file.path(output_folder, "cleaned_experimental_results.Rdata"))
 
 
 ########################################
@@ -199,7 +198,6 @@ if (FALSE) {
         ncol=2
     )
 }
-
 
 save(posterior_comp_df, file=file.path(output_folder, "posteriors.Rdata"))
 
