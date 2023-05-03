@@ -16,20 +16,28 @@ non_arm_models <- GetNonARMModels()
 raw_coverage_df <-
     read.csv(file.path(input_folder, "coverage_tidy.csv"), as.is=TRUE) %>%
     filter(!(model %in% models_to_remove)) %>%
-    mutate(is_arm=IsARM(model))
+    mutate(is_arm=IsARM(model)) %>%
+    mutate(method="inverse")
 
+raw_coverage_cg_df <-
+    read.csv(file.path(input_folder, "coverage_tidy_cg.csv"), as.is=TRUE) %>%
+    mutate(is_arm=FALSE) %>%
+    mutate(model=recode(model, occu="occ_det")) %>%
+    mutate(method="CG")
+
+cg_models <- raw_coverage_cg_df$model %>% unique()
 
 # POTUS is missing
 filter(raw_coverage_df, !is_arm) %>%
     pull(model) %>%
     unique()
 
-
-REF_SEED <- "reference"
-stopifnot(sum(raw_coverage_df$seed == REF_SEED) > 0)
-
-non_arm_models %in% unique(coverage_df$model)
-
+coverage_comb_df <-
+    bind_rows(
+        raw_coverage_cg_df,
+        raw_coverage_df %>% filter(!(model %in% cg_models))
+    )
+head(coverage_comb_df)
 
 # A list of stuff to be saved for the paper
 save_list <- list()
@@ -42,7 +50,7 @@ save_list <- list()
 
 # Compare to the average within the runs with the max number of draws.
 truth_df <-     
-    raw_coverage_df %>%
+    coverage_comb_df %>%
     filter(num_draws==max(num_draws)) %>%
     group_by(param, model, num_draws) %>%
     summarize(mean_all=mean(mean),
@@ -50,8 +58,10 @@ truth_df <-
               freq_sd_all=sqrt(mean(freq_sd^2) / n_runs),
               .groups="drop")
 
+filter(truth_df, model == "tennis")
+
 coverage_df <-
-    inner_join(raw_coverage_df,
+    inner_join(coverage_comb_df,
                truth_df %>% 
                    select(param, model, mean_all, freq_sd_all, n_runs),
                by=c("param", "model")) %>%
@@ -178,6 +188,32 @@ if (FALSE) {
 
 
 save_list[["bucketed_df"]] <- bucketed_df
+
+
+################################
+# Hmm
+
+coverage_df %>%
+    filter(method == "CG") %>%
+    #select(mean, mean_all, freq_sd, freq_sd_all, z_score, p_val, p_bucket, model) %>%
+    group_by(model) %>%
+    arrange(p_val) %>%
+    mutate(n=1:n() / n()) %>%
+    ggplot() +
+        geom_point(aes(x=n, y=p_val, group=model, color=model)) +
+    ggtitle(sprintf("CG methods, Num draws = %d", num_draws)) +
+    facet_grid(~ num_draws)
+
+
+# Sanity check
+bind_cols(
+    coverage_df %>% filter(model == "occ_det", num_draws == 32) %>% 
+        arrange(p_val) %>% select(p_val) %>% rename(p1=p_val),
+    coverage_df %>% filter(model == "occ_det", num_draws == 64) %>% 
+        arrange(p_val) %>% select(p_val) %>% rename(p2=p_val)
+) %>%
+    ggplot() + geom_point(aes(x=p1, y=p2))
+    
 
 #############################
 # Save
