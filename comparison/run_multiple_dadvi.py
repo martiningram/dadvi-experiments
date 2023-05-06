@@ -10,7 +10,10 @@ import sys
 
 from utils import load_model_by_name
 from dadvi.jax import build_dadvi_funs
-from dadvi.pymc.pymc_to_jax import get_jax_functions_from_pymc
+from dadvi.pymc.pymc_to_jax import (
+    get_jax_functions_from_pymc,
+    get_flattened_indices_and_param_names,
+)
 from dadvi.doubling_dadvi import (
     optimise_dadvi_by_doubling,
     fit_dadvi_and_estimate_covariances,
@@ -43,6 +46,8 @@ dadvi_funs = build_dadvi_funs(jax_funs["log_posterior_fun"])
 init_means = np.zeros(jax_funs["n_params"])
 init_log_vars = np.zeros(jax_funs["n_params"]) - 3
 init_var_params = np.concatenate([init_means, init_log_vars])
+
+flat_indices, flat_param_names = get_flattened_indices_and_param_names(jax_funs)
 
 # TODO: We don't double any more -- so maybe we shouldn't be calling this
 opt_result = optimise_dadvi_by_doubling(
@@ -78,7 +83,6 @@ reference_results = {
 rerun_results = list()
 
 for cur_run in range(n_reruns):
-
     print(f"On {cur_run} of {n_reruns}")
 
     cur_seed = 1000 + cur_run
@@ -113,6 +117,8 @@ for cur_run in range(n_reruns):
             "scipy_opt_result": opt["opt_result"],
             "lrvb_hvp_calls": result["lrvb_hvp_calls"],
             "lrvb_freq_cov_grad_calls": result["lrvb_freq_cov_grad_calls"],
+            "names": flat_param_names,
+            "indices": flat_indices,
             **get_run_datetime_and_hostname(),
         }
     )

@@ -20,12 +20,12 @@ jax_funs = get_jax_functions_from_pymc(model)
 dadvi_funs = build_dadvi_funs(jax_funs["log_posterior_fun"])
 
 reruns = glob(
-    # "/Users/martin.ingram/Projects/PhD/dadvi_experiments/comparison/big_model_coverage/march_2023_coverage/*/occ_det/*.pkl"
-    "/home/martin.ingram/experiment_runs/march_2023_coverage/*/occ_det/*.pkl"
+    "/Users/martin.ingram/Projects/PhD/dadvi_experiments/comparison/big_model_coverage/march_2023_coverage/*/occ_det/*.pkl"
+    # "/home/martin.ingram/experiment_runs/march_2023_coverage/*/occ_det/*.pkl"
 )
 
-# target_dir = "./big_model_coverage/summaries/occ_det/"
-target_dir = "/home/martin.ingram/experiment_runs/coverage_summaries_big_models"
+target_dir = "./big_model_coverage/summaries/occ_det/"
+# target_dir = "/home/martin.ingram/experiment_runs/coverage_summaries_big_models"
 
 
 def pres_prob(params, sample_loc, species_id):
@@ -62,7 +62,6 @@ def compute_quantities(occu_res, dadvi_res):
     results = list()
 
     for species_id in species_chosen:
-        print(species_id)
         cur_fun = partial(pres_prob, species_id=species_id, sample_loc=sample_loc)
 
         lrvb_res = (
@@ -96,13 +95,32 @@ def compute_quantities(occu_res, dadvi_res):
 
 full_results = list()
 
+os.makedirs(target_dir, exist_ok=True)
+
 for cur_rerun in tqdm(reruns):
+    print(cur_rerun)
+
+    split_path = cur_rerun.split('/')
+    m_num = split_path[-3]
+    rerun_num = split_path[-1].split('.')[0]
+    target_file = os.path.join(target_dir, f'{m_num}_{rerun_num}.pkl')
+
+    if os.path.isfile(target_file):
+        print('Already exists; skipping.')
+        continue
+
     occu_res, dadvi_res = build_dadvi_res(cur_rerun)
-    quantities = compute_quantities(occu_res, dadvi_res)
+
+    if occu_res['z'].shape[0] < 10:
+        continue
+
+    try:
+        quantities = compute_quantities(occu_res, dadvi_res)
+    except Exception as e:
+        print(e)
+        print(f'Failed to compute {cur_rerun}. Skipping.')
+        continue
+
     quantities["filename"] = cur_rerun
 
-    full_results.append(quantities)
-
-result = pd.DataFrame(full_results)
-os.makedirs(target_dir, exist_ok=True)
-result.to_pickle(os.path.join(target_dir, "occ_det.pkl"))
+    pickle.dump(quantities, open(target_file, 'wb'))

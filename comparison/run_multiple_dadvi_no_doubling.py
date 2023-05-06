@@ -7,10 +7,13 @@ import pickle
 from utils import load_model_by_name
 from dadvi.jax import build_dadvi_funs
 from dadvi.core import find_dadvi_optimum
-from dadvi.pymc.pymc_to_jax import get_jax_functions_from_pymc
+from dadvi.pymc.pymc_to_jax import (
+    get_jax_functions_from_pymc,
+    get_flattened_indices_and_param_names,
+)
 import numpy as np
-import pandas as pd
 from argparse import ArgumentParser
+
 
 parser = ArgumentParser()
 parser.add_argument("--model-name", required=True)
@@ -36,6 +39,8 @@ init_means = np.zeros(jax_funs["n_params"])
 init_log_vars = np.zeros(jax_funs["n_params"]) - 3
 init_var_params = np.concatenate([init_means, init_log_vars])
 
+flat_param_names, flat_param_indices = get_flattened_indices_and_param_names(jax_funs)
+
 np.random.seed(2)
 zs = np.random.randn(M, jax_funs["n_params"])
 
@@ -47,7 +52,7 @@ opt_result = find_dadvi_optimum(
 )
 
 # Get the results from our reference run:
-reference_results = {"seed": 2, "opt_result": opt_result, 'z': zs}
+reference_results = {"seed": 2, "opt_result": opt_result, "z": zs}
 
 with open(os.path.join(target_dir, "reference.pkl"), "wb") as f:
     pickle.dump(reference_results, f)
@@ -56,7 +61,6 @@ completed_runs = 0
 attempts = 0
 
 while completed_runs < n_reruns:
-
     print(f"On {completed_runs} of {n_reruns}")
 
     cur_seed = 1000 + attempts
@@ -72,10 +76,14 @@ while completed_runs < n_reruns:
     try:
         result = find_dadvi_optimum(rerun_var_params, cur_z, dadvi_funs=dadvi_funs)
     except Exception as e:
-        print(f'Optimisation failed with error: {e}')
-        print(f'Retrying with new seed.')
+        print(f"Optimisation failed with error: {e}")
+        print(f"Retrying with new seed.")
 
-    rerun_results = {"seed": cur_seed, "opt_result": result, 'z': cur_z}
+    rerun_results = {
+        "seed": cur_seed,
+        "opt_result": result,
+        "z": cur_z,
+    }
 
     with open(os.path.join(target_dir, f"{completed_runs}.pkl"), "wb") as f:
         pickle.dump(rerun_results, f)
