@@ -24,8 +24,10 @@ raw_coverage_cg_df <-
     mutate(is_arm=FALSE) %>%
     mutate(model=recode(model, occu="occ_det")) %>%
     mutate(method="CG")
-
 cg_models <- raw_coverage_cg_df$model %>% unique()
+
+
+filter(raw_coverage_cg_df, seed == min(seed), num_draws == 32)
 
 # POTUS is missing
 filter(raw_coverage_df, !is_arm) %>%
@@ -105,19 +107,111 @@ if (FALSE) {
 
 
 #######################################################
-# Check for p-value uniformity in a variety of ways
+# Check for p-value uniformity
+
+# How many bins should we use?  Less for POTUS, which has only one
+# quantity of interest
+coverage_df %>%
+    group_by(model_grouping, method) %>%
+    filter(num_draws == 32) %>%
+    summarize(n=n())
 
 
 # Bin and look for p-value uniformity
 n_bins <- 100
 p_breaks <- seq(0, 1, 1/n_bins)
+p_breaks_potus <- seq(0, 1, 1/20)
+
 stopifnot(length(p_breaks) == n_bins + 1)
 # Time consuming for some reason
 coverage_df <-
     coverage_df %>%
-    mutate(p_bucket=cut(p_val, p_breaks))
+    mutate(p_bucket=case_when(
+        model_grouping != "potus" ~ cut(p_val, p_breaks, labels=FALSE),
+        model_grouping == "potus" ~ cut(p_val, p_breaks_potus, labels=FALSE))) %>%
+    ungroup() %>% group_by(model_grouping) %>%
+    mutate(p_bucket = p_bucket / max(p_bucket),
+           n_bins=length(unique(p_bucket)))
 
 
+
+# Aggregate within a bucket for visualization
+
+bucketed_df <-
+    inner_join(
+        coverage_df %>%
+            group_by(num_draws, model_grouping, n_bins, p_bucket) %>%
+            summarize(bucket_n=n(), .groups="drop"),
+        coverage_df %>%
+            group_by(num_draws, model_grouping, n_bins) %>%
+            summarize(group_n=n(), .groups="drop"),
+        by=c("num_draws", "model_grouping", "n_bins")) %>%
+    mutate(p_dens=bucket_n / group_n)
+head(bucketed_df)
+save_list[["bucketed_df"]] <- bucketed_df
+
+# Sanity check.
+p_dens_total <-
+    group_by(bucketed_df) %>%
+    group_by(num_draws, model_grouping) %>%
+    summarize(s=sum(p_dens), .groups="drop") %>%
+    pull(s) %>%
+    unique()
+stopifnot(p_dens_total == 1)
+
+if (FALSE) {
+    ggplot(bucketed_df) +
+        geom_line(aes(x=p_bucket, y=p_dens * n_bins, 
+                      group=model_grouping, color=model_grouping)) +
+        facet_grid(num_draws ~ ., scales="free") +
+        expand_limits(y=0) +
+        theme(axis.text.x=element_blank())
+}
+
+
+save_list[["bucketed_df"]] <- bucketed_df
+
+
+################################
+# Hmm
+
+if (FALSE) {
+
+    
+    coverage_df %>%
+        filter(method == "CG") %>%
+        #select(mean, mean_all, freq_sd, freq_sd_all, z_score, p_val, p_bucket, model) %>%
+        group_by(model) %>%
+        arrange(p_val) %>%
+        mutate(n=1:n() / n()) %>%
+        ggplot() +
+            geom_point(aes(x=n, y=p_val, group=model, color=model)) +
+            ggtitle(sprintf("CG methods, Num draws = %d", num_draws)) +
+            facet_grid(~ num_draws)
+    
+    # Sanity check
+    bind_cols(
+        coverage_df %>% filter(model == "occ_det", num_draws == 32) %>% 
+            arrange(p_val) %>% select(p_val) %>% rename(p1=p_val),
+        coverage_df %>% filter(model == "occ_det", num_draws == 64) %>% 
+            arrange(p_val) %>% select(p_val) %>% rename(p2=p_val)
+    ) %>%
+        ggplot() + geom_point(aes(x=p1, y=p2))
+    
+}
+    
+
+#############################
+# Save
+
+output_file <- file.path(output_folder, "coverage_summary.Rdata")
+print(output_file)
+save(save_list, file=output_file)
+
+
+
+# KS tests are not formally valid since the parameter
+# estimates are not independent, but what the hell
 
 GetKSPval <- function(x) {
     ks.test(x, "punif")$p.value
@@ -147,77 +241,7 @@ ks_test_df <-
     mutate(reject=ks_test < 0.01) %>%
     arrange(num_draws, ks_test)
 
-save_list[["ks_test_param_df"]] <- ks_test_param_df
-save_list[["ks_test_df"]] <- ks_test_df
-    
+# save_list[["ks_test_param_df"]] <- ks_test_param_df
+# save_list[["ks_test_df"]] <- ks_test_df
 
 
-############################################################
-# Aggregate within a bucket for visualization
-
-bucketed_df <-
-    inner_join(
-        coverage_df %>%
-            group_by(num_draws, model_grouping, p_bucket) %>%
-            summarize(bucket_n=n(), .groups="drop"),
-        coverage_df %>%
-            group_by(num_draws, model_grouping) %>%
-            summarize(group_n=n(), .groups="drop"),
-        by=c("num_draws", "model_grouping")) %>%
-    mutate(p_dens=bucket_n / group_n)
-head(bucketed_df)
-save_list[["bucketed_df"]] <- bucketed_df
-
-# Sanity check.
-p_dens_total <-
-    group_by(bucketed_df) %>%
-    group_by(num_draws, model_grouping, group_n) %>%
-    summarize(s=sum(p_dens), .groups="drop") %>%
-    pull(s) %>%
-    unique()
-stopifnot(p_dens_total == 1)
-
-if (FALSE) {
-    ggplot(bucketed_df) +
-        geom_line(aes(x=p_bucket, y=n_bins * p_dens, 
-                      group=model_grouping, color=model_grouping)) +
-        facet_grid(num_draws ~ .) +
-        expand_limits(y=0) +
-        theme(axis.text.x=element_blank())
-}
-
-
-save_list[["bucketed_df"]] <- bucketed_df
-
-
-################################
-# Hmm
-
-coverage_df %>%
-    filter(method == "CG") %>%
-    #select(mean, mean_all, freq_sd, freq_sd_all, z_score, p_val, p_bucket, model) %>%
-    group_by(model) %>%
-    arrange(p_val) %>%
-    mutate(n=1:n() / n()) %>%
-    ggplot() +
-        geom_point(aes(x=n, y=p_val, group=model, color=model)) +
-    ggtitle(sprintf("CG methods, Num draws = %d", num_draws)) +
-    facet_grid(~ num_draws)
-
-
-# Sanity check
-bind_cols(
-    coverage_df %>% filter(model == "occ_det", num_draws == 32) %>% 
-        arrange(p_val) %>% select(p_val) %>% rename(p1=p_val),
-    coverage_df %>% filter(model == "occ_det", num_draws == 64) %>% 
-        arrange(p_val) %>% select(p_val) %>% rename(p2=p_val)
-) %>%
-    ggplot() + geom_point(aes(x=p1, y=p2))
-    
-
-#############################
-# Save
-
-output_file <- file.path(output_folder, "coverage_summary.Rdata")
-print(output_file)
-save(save_list, file=output_file)
