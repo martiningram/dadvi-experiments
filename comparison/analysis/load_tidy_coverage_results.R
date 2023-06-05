@@ -27,11 +27,6 @@ raw_coverage_cg_df <-
 
 cg_models <- raw_coverage_cg_df$model %>% unique()
 
-# POTUS is missing
-filter(raw_coverage_df, !is_arm) %>%
-    pull(model) %>%
-    unique()
-
 coverage_comb_df <-
     bind_rows(
         raw_coverage_cg_df,
@@ -105,7 +100,7 @@ if (FALSE) {
 
 
 #######################################################
-# Check for p-value uniformity in a variety of ways
+# Check for p-value uniformity
 
 
 # Bin and look for p-value uniformity
@@ -118,54 +113,25 @@ coverage_df <-
     mutate(p_bucket=cut(p_val, p_breaks))
 
 
-
-GetKSPval <- function(x) {
-    ks.test(x, "punif")$p.value
-}
-
-ks_test_param_df <-
-    coverage_df %>%
-    group_by(num_draws, model, param) %>%
-    summarize(ks_test=GetKSPval(p_val), .groups="drop") %>%
-    mutate(reject=ks_test < 0.01) %>%
-    arrange(num_draws, ks_test)
-
-
-if (FALSE) {
-    filter(ks_test_param_df, reject) %>%
-        arrange(model, param, num_draws) %>%
-        select(model, param, num_draws, ks_test, reject) %>%
-        View()
-}
-
-
-
-ks_test_df <-
-    coverage_df %>%
-    group_by(num_draws, model_grouping) %>%
-    summarize(ks_test=GetKSPval(p_val), .groups="drop") %>%
-    mutate(reject=ks_test < 0.01) %>%
-    arrange(num_draws, ks_test)
-
-save_list[["ks_test_param_df"]] <- ks_test_param_df
-save_list[["ks_test_df"]] <- ks_test_df
-    
-
-
-############################################################
-# Aggregate within a bucket for visualization
-
 bucketed_df <-
     inner_join(
         coverage_df %>%
             group_by(num_draws, model_grouping, p_bucket) %>%
-            summarize(bucket_n=n(), .groups="drop"),
+            summarize(bucket_n=n(), .groups="drop") %>%
+            group_by(model_grouping, num_draws) %>%
+            complete(p_bucket, fill=list(bucket_n=0)),
         coverage_df %>%
             group_by(num_draws, model_grouping) %>%
             summarize(group_n=n(), .groups="drop"),
         by=c("num_draws", "model_grouping")) %>%
     mutate(p_dens=bucket_n / group_n)
 head(bucketed_df)
+
+bucketed_df %>%
+  group_by(model_grouping, num_draws) %>%
+  # complete(p_bucket, fill=list(bucket_n=0)) %>%
+  summarize(n=n())
+
 save_list[["bucketed_df"]] <- bucketed_df
 
 # Sanity check.
@@ -178,12 +144,23 @@ p_dens_total <-
 stopifnot(p_dens_total == 1)
 
 if (FALSE) {
-    ggplot(bucketed_df) +
-        geom_line(aes(x=p_bucket, y=n_bins * p_dens, 
-                      group=model_grouping, color=model_grouping)) +
-        facet_grid(num_draws ~ .) +
-        expand_limits(y=0) +
-        theme(axis.text.x=element_blank())
+  num_draws <- unique(bucketed_df$num_draws)
+  draw_labels <- sprintf("%d draws", num_draws)
+  names(draw_labels) <- num_draws
+
+  bucketed_df %>%
+    mutate(model=model_grouping) %>%
+    mutate(p_bucket_num=as.numeric(p_bucket)) %>%
+    mutate(p_bucket_num=p_bucket_num / max(p_bucket_num)) %>%
+    ggplot() +
+    geom_hline(aes(yintercept=1), alpha=0.6) +
+    geom_line(aes(x=p_bucket_num, y=n_bins * p_dens,
+                  group=model_grouping, color=model_grouping)) +
+    facet_grid(model_grouping ~ num_draws,
+               scales="free") +
+    expand_limits(y=0) +
+    ylab("Proportion of p-values in bucket times # of buckets") +
+    xlab("P-value bucket")
 }
 
 
@@ -206,14 +183,15 @@ coverage_df %>%
 
 
 # Sanity check
-bind_cols(
+if (FALSE) {
+  bind_cols(
     coverage_df %>% filter(model == "occ_det", num_draws == 32) %>% 
-        arrange(p_val) %>% select(p_val) %>% rename(p1=p_val),
+      arrange(p_val) %>% select(p_val) %>% rename(p1=p_val),
     coverage_df %>% filter(model == "occ_det", num_draws == 64) %>% 
-        arrange(p_val) %>% select(p_val) %>% rename(p2=p_val)
-) %>%
+      arrange(p_val) %>% select(p_val) %>% rename(p2=p_val)) %>%
     ggplot() + geom_point(aes(x=p1, y=p2))
-    
+}
+
 
 #############################
 # Save
@@ -221,3 +199,41 @@ bind_cols(
 output_file <- file.path(output_folder, "coverage_summary.Rdata")
 print(output_file)
 save(save_list, file=output_file)
+
+
+
+
+############################################################
+# KS test is not really valid since within a model results
+# are correlated
+
+GetKSPval <- function(x) {
+  ks.test(x, "punif")$p.value
+}
+
+ks_test_param_df <-
+  coverage_df %>%
+  group_by(num_draws, model, param) %>%
+  summarize(ks_test=GetKSPval(p_val), .groups="drop") %>%
+  mutate(reject=ks_test < 0.01) %>%
+  arrange(num_draws, ks_test)
+
+
+if (FALSE) {
+  filter(ks_test_param_df, reject) %>%
+    arrange(model, param, num_draws) %>%
+    select(model, param, num_draws, ks_test, reject) %>%
+    View()
+}
+
+
+
+ks_test_df <-
+  coverage_df %>%
+  group_by(num_draws, model_grouping) %>%
+  summarize(ks_test=GetKSPval(p_val), .groups="drop") %>%
+  mutate(reject=ks_test < 0.01) %>%
+  arrange(num_draws, ks_test)
+
+# save_list[["ks_test_param_df"]] <- ks_test_param_df
+# save_list[["ks_test_df"]] <- ks_test_df
