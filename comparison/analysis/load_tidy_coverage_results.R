@@ -129,7 +129,6 @@ head(bucketed_df)
 
 bucketed_df %>%
   group_by(model_grouping, num_draws) %>%
-  # complete(p_bucket, fill=list(bucket_n=0)) %>%
   summarize(n=n())
 
 save_list[["bucketed_df"]] <- bucketed_df
@@ -137,7 +136,7 @@ save_list[["bucketed_df"]] <- bucketed_df
 # Sanity check.
 p_dens_total <-
     group_by(bucketed_df) %>%
-    group_by(num_draws, model_grouping, group_n) %>%
+    group_by(num_draws, model_grouping) %>%
     summarize(s=sum(p_dens), .groups="drop") %>%
     pull(s) %>%
     unique()
