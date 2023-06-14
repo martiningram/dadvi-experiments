@@ -39,3 +39,10 @@ and maybe machine id in all the metadata.  What do you think?
 Installation notes
 
 I had a very hard time getting RAABBVI to work with recent python versions. Ultimately, I reverted back to older stuff to get that part to run. The env is called `functioning_raabbvi_env.yaml`.
+
+
+-----------------
+Latest runs
+
+- Coverage: https://drive.google.com/file/d/1eb_43sNcHVkScbfN_NToU35b2tkFeLMB/view?usp=sharing
+- Posteriors: https://drive.google.com/file/d/1TC74Pf8SPhJwI-VDp9eX1iSKc8BINXNK/view?usp=sharing
