@@ -23,6 +23,8 @@ venv: $(venv)
 
 .PHONY: PosteriorsLoadAndTidyAndSave
 PosteriorsLoadAndTidyAndSave: venv
+	# Note that the ``Jupyter run'' warning is apparently not true.
+	# Maybe this should actually be a script and not a notebook.
 	cd $(PP_DIR) && \
 	. venv/bin/activate && \
 	jupyter execute PosteriorsLoadAndTidyAndSave.ipynb
