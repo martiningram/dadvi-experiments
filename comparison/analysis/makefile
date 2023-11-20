@@ -30,11 +30,33 @@ PosteriorsLoadAndTidyAndSave: venv
 	jupyter execute PosteriorsLoadAndTidyAndSave.ipynb
 
 
-$(BLADE_DIR)/posteriors_tidy.csv: PosteriorsLoadAndTidyAndSave
-$(BLADE_DIR)/metadata_tidy.csv: PosteriorsLoadAndTidyAndSave
-$(BLADE_DIR)/trace_tidy.csv: PosteriorsLoadAndTidyAndSave
-$(BLADE_DIR)/params_tidy.csv: PosteriorsLoadAndTidyAndSave
-$(BLADE_DIR)/mcmc_diagnostics_tidy.csv: PosteriorsLoadAndTidyAndSave
+$(BLADE_DIR)/posteriors_tidy.csv:
+	make PosteriorsLoadAndTidyAndSave
+$(BLADE_DIR)/metadata_tidy.csv:
+	make PosteriorsLoadAndTidyAndSave
+$(BLADE_DIR)/trace_tidy.csv:
+	make PosteriorsLoadAndTidyAndSave
+$(BLADE_DIR)/params_tidy.csv:
+	make PosteriorsLoadAndTidyAndSave
+$(BLADE_DIR)/mcmc_diagnostics_tidy.csv:
+	make PosteriorsLoadAndTidyAndSave
+
+
+RERUN_DIR := $(ANALYSIS_DIR)/coverage_warm_starts_rerun
+$(RERUN_DIR)/coverage_tidy.csv:
+	make FrequentistCoverageLoadAndTidyAndSave
+$(RERUN_DIR)/coverage_tidy_cg.csv:
+	make FrequentistCoverageLoadAndTidyAndSave
+
+.PHONY: FrequentistCoverageLoadAndTidyAndSave
+FrequentistCoverageLoadAndTidyAndSave: venv
+	# Note that the ``Jupyter run'' warning is apparently not true.
+	# Maybe this should actually be a script and not a notebook.
+	cd $(PP_DIR) && \
+	. venv/bin/activate && \
+	jupyter execute FrequentistCoverageLoadAndTidyAndSave.ipynb
+
+
 
 clean:
 	rm $(BLADE_DIR)/posteriors_tidy.csv
@@ -42,6 +64,8 @@ clean:
 	rm $(BLADE_DIR)/trace_tidy.csv
 	rm $(BLADE_DIR)/params_tidy.csv
 	rm $(BLADE_DIR)/mcmc_diagnostics_tidy.csv
+	rm $(RERUN_DIR)/coverage_tidy.csv
+	rm $(RERUN_DIR)/coverage_tidy_cg.csv
 
-
-all: PosteriorsLoadAndTidyAndSave
+all:
+	echo TODO: populate this
