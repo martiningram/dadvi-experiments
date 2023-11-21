@@ -34,9 +34,8 @@ while read MODEL_NAME; do
         	--warm-start
     done;
 
+    # TODO: This is not working -- need to work on that.
     echo "Running RAABBVI"
     python fit_raabbvi.py "$MODEL_NAME" "$TARGET_DIR"
-
-    break
 
 done < all_arm_names.txt
