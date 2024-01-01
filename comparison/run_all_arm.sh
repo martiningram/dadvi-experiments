@@ -1,5 +1,5 @@
 # This script runs the experiments for the ARM models
-TARGET_DIR='./experiment_runs/november_2023'
+TARGET_DIR='./experiment_runs/december_2023'
 COVERAGE_TARGET_DIR='./experiment_runs/coverage/'
 
 while read MODEL_NAME; do
@@ -34,7 +34,6 @@ while read MODEL_NAME; do
         	--warm-start
     done;
 
-    # TODO: This is not working -- need to work on that.
     echo "Running RAABBVI"
     python fit_raabbvi.py "$MODEL_NAME" "$TARGET_DIR"
 

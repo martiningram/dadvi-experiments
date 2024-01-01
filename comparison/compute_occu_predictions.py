@@ -16,6 +16,7 @@ from dadvi.jax import build_dadvi_funs
 from dadvi.pymc.pymc_to_jax import get_jax_functions_from_pymc
 from dadvi.pymc.jax_api import DADVIResult
 from utils import get_run_datetime_and_hostname
+from argparse import ArgumentParser
 
 
 def pres_prob(params, sample_loc, species_id):
@@ -41,8 +42,13 @@ def compute_distribution_from_draws(draws, function):
     return results
 
 
-OCCU_DADVI_PATH = "/home/martin.ingram/experiment_runs/march_2023/dadvi_results/dadvi_info/occ_det.pkl"
-EXPERIMENT_BASE_DIR = '/home/martin.ingram/experiment_runs/march_2023'
+parser = ArgumentParser()
+parser.add_argument('--experiment-base-dir', required=True, type=str,
+                    help='Directory containing the experimental results')
+args = parser.parse_args()
+
+EXPERIMENT_BASE_DIR = args.experiment_base_dir
+OCCU_DADVI_PATH = os.path.join(args.experiment_base_dir, 'dadvi_results', 'dadvi_info', 'occ_det.pkl')
 
 # Load occ_det results
 occ_res = pickle.load(open(OCCU_DADVI_PATH, "rb"))
