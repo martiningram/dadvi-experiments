@@ -13,16 +13,15 @@ import pandas as pd
 from argparse import ArgumentParser
 from coverage_helpers import add_columns, save_dfs_by_M
 
+parser = ArgumentParser()
+parser.add_argument('--coverage-base-dir', required=True)
+args = parser.parse_args()
 
 tennis_model = fetch_tennis_model(1969, sackmann_dir=SACKMANN_DIR)
 model = tennis_model["model"]
 jax_funs = get_jax_functions_from_pymc(model)
 dadvi_funs = build_dadvi_funs(jax_funs["log_posterior_fun"])
 encoder = tennis_model["encoder"]
-
-parser = ArgumentParser()
-parser.add_argument('--coverage-base-dir', required=True)
-args = parser.parse_args()
 
 reruns = glob(
     os.path.join(args.coverage_base_dir, '*', 'tennis', '*.pkl')
