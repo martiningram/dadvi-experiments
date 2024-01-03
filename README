@@ -1,45 +1,35 @@
-Ryan, I think you mentioned in our last meeting that you'd like to start taking
-a look at the experimental results, right? There are basically three parts to
-this: Comparison of moments (means, sds) and runtime, Coverage analysis for ARM &
-non-ARM models, except POTUS Coverage analysis for POTUS
+# DADVI experiments
 
-For (1), code is here: comparison/analysis/compare_moment_estimates.ipynb
-and data is here:
-https://drive.google.com/file/d/1y-k5unAPPAjI3kPrzpJAwGcfA7Dmr8Dx/view?usp=share_link
-unzip model_runs.zip -d comparison/blade_runs/
+This repository contains code to reproduce the results in the paper "Black Box
+Variational Inference with a Deterministic Objective: Faster, More Accurate,
+and Even More Black Box", by Giordano, Ingram and Broderick.
 
-For (2), code is here:
-comparison/analysis/DADVI%20coverage.ipynb and the data is here:
-https://drive.google.com/file/d/1Ey0NEvEGbLowePTwvDjwHxehxLbqh7MB/view?usp=share_link
+### How to use this
 
-I can also send (3) through, but I'm still having some convergence issues with
-CG.
+The first step is to install the DADVI library, which is available here:
+https://github.com/martiningram/dadvi . We recommend doing this using
+the Dockerfile provided to ensure that all of the models and competing
+approaches work as expected.
 
-For (1), I should rerun things and save the final Newton step norm to make sure
-DADVI always converges. But I thought I'd send this through already, so that you
-can have a first look. Let me know if you have any questions :)
+Once DADVI is installed, the experimental results can be reproduced by running
+the scripts in the `comparison` directory. There are two of these scripts:
 
+1. `run_arm_experiments.sh`: This script runs the experiments for the models
+   taken from the applied regression modelling textbook (see the paper). They
+   are relatively quick to run for all methods.
+2. `run_large_model_experiments.sh`: This script runs the experiments for the
+   larger models in the comparison. This will take quite a while, especially
+   because of the coverage experiments, which rerun DADVI 100 times for
+   a different number of draws, so about 400 times per model in total.
 
-----------------
-Notes for Martin
+The scripts define output directories at the start, which you should set as
+you like.
 
-
-- Every method should have a 'converged' metadata tag using its own appropriate
-metric.  I agree with your inlinen TODO, let's make sure rhat is in there for NUTS
-- I see the metadata doesn't really contain evaluation counts for all models,
-and is using runtime now.  Are evaluation counts saved somewhere else?
-- The last two indices of beta_full for the NUTS microcredit model are mean
-zero and zero standard deviation.  Any idea what's going on there?
-- It would be nice to have some kind of version control for results to make sure
-we're looking at the right date.  I think maybe we could save a timestamp
-and maybe machine id in all the metadata.  What do you think?
-
-
-----------------
-Installation notes
-
-I had a very hard time getting RAABBVI to work with recent python versions. Ultimately, I reverted back to older stuff to get that part to run. The env is called `functioning_raabbvi_env.yaml`.
-
+Once these raw experiments are rerun, you can perform the analysis for the paper
+using the `makefile` in the `analysis` folder. To do that, you should change the
+`BLADE_DIR` in that makefile to wherever you saved the experiments (this should
+be the `TARGET_DIR` in the scripts), and the `RERUN_DIR` to where you saved the
+coverage experiments.
 
 -----------------
 Latest runs
