@@ -6,12 +6,18 @@ from dadvi.jax import build_dadvi_funs
 from dadvi.pymc.jax_api import DADVIResult
 import numpy as np
 from glob import glob
-from tqdm.notebook import tqdm
+from tqdm import tqdm
 from jax.scipy.special import expit
 import pandas as pd
 from utils import get_potus_model
 from config import POTUS_JSON_PATH
+from coverage_helpers import add_columns, save_dfs_by_M
+from argparse import ArgumentParser
 
+
+parser = ArgumentParser()
+parser.add_argument('--coverage-base-dir', required=True)
+args = parser.parse_args()
 
 model = get_potus_model(POTUS_JSON_PATH)
 potus_data = json.load(open(POTUS_JSON_PATH))
@@ -34,13 +40,8 @@ jax_funs = get_jax_functions_from_pymc(model)
 dadvi_funs = build_dadvi_funs(jax_funs["log_posterior_fun"])
 
 reruns = glob(
-     "/Users/martin.ingram/Projects/PhD/dadvi_experiments/comparison/big_model_coverage/march_2023_coverage/*/potus/*.pkl"
-     # "/home/martin.ingram/experiment_runs/march_2023_coverage/*/potus/*.pkl"
+    os.path.join(args.coverage_base_dir, '*', 'potus', '*.pkl')
 )
-
-target_dir = "./big_model_coverage/summaries/potus/"
-# target_dir = "/home/martin.ingram/experiment_runs/coverage_summaries_big_models"
-
 
 def compute_final_vote_share(params):
     rel_means = params["raw_mu_b_T"]
@@ -96,20 +97,14 @@ def compute_quantities(occu_res, dadvi_res):
     return result_series
 
 
-os.makedirs(target_dir, exist_ok=True)
+full_results = list()
 
 for cur_rerun in tqdm(reruns):
-    print(cur_rerun)
     potus_res, dadvi_res = build_dadvi_res(cur_rerun)
 
     split_path = cur_rerun.split('/')
     m_num = split_path[-3]
     rerun_num = split_path[-1].split('.')[0]
-    target_file = os.path.join(target_dir, f'{m_num}_{rerun_num}.pkl')
-
-    if os.path.isfile(target_file):
-        print('Already exists; skipping.')
-        continue
 
     if potus_res['z'].shape[0] < 10:
         continue
@@ -122,5 +117,21 @@ for cur_rerun in tqdm(reruns):
         continue
     quantities["filename"] = cur_rerun
 
+    full_results.append(quantities)
 
-    pickle.dump(quantities, open(target_file, 'wb'))
+
+result = pd.DataFrame(full_results)
+
+# Add naming
+names = ['final_vote_share' for _ in range(1)]
+indices = list(range(1))
+
+names_repeated = [names for _ in range(result.shape[0])]
+indices_repeated = [indices for _ in range(result.shape[0])]
+
+result['names'] = names_repeated
+result['indices'] = indices_repeated
+
+result = add_columns(result)
+
+save_dfs_by_M(result, 'potus', args.coverage_base_dir)

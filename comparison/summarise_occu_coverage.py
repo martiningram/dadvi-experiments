@@ -5,7 +5,7 @@ from dadvi.jax import build_dadvi_funs
 from dadvi.pymc.jax_api import DADVIResult
 import numpy as np
 from glob import glob
-from tqdm.notebook import tqdm
+from tqdm import tqdm
 from functools import partial
 import pandas as pd
 from utils import get_occ_det_model_from_pickle
@@ -99,19 +99,12 @@ def compute_quantities(occu_res, dadvi_res):
 
 full_results = list()
 
-os.makedirs(target_dir, exist_ok=True)
-
 for cur_rerun in tqdm(reruns):
     print(cur_rerun)
 
     split_path = cur_rerun.split('/')
     m_num = split_path[-3]
     rerun_num = split_path[-1].split('.')[0]
-    target_file = os.path.join(target_dir, f'{m_num}_{rerun_num}.pkl')
-
-    if os.path.isfile(target_file):
-        print('Already exists; skipping.')
-        continue
 
     occu_res, dadvi_res = build_dadvi_res(cur_rerun)
 
@@ -127,7 +120,7 @@ for cur_rerun in tqdm(reruns):
 
     quantities["filename"] = cur_rerun
 
-    pickle.dump(quantities, open(target_file, 'wb'))
+    full_results.append(quantities)
 
 result = pd.DataFrame(full_results)
 

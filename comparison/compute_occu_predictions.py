@@ -66,8 +66,10 @@ dadvi_res = DADVIResult(
     dadvi_funs=dadvi_funs,
 )
 
+n_species = 2
+
 np.random.seed(2)
-species_chosen = np.random.choice(occ_pickle["y_df"].shape[1], size=20, replace=False)
+species_chosen = np.random.choice(occ_pickle["y_df"].shape[1], size=n_species, replace=False)
 
 sample_loc = occ_pickle["X_env_mat"][200]
 

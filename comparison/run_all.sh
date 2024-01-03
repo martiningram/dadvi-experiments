@@ -8,27 +8,33 @@ if [ ! -f ./data/tennis_atp/atp_players.csv ]; then
 fi
 
 # for MODEL_NAME in microcredit occ_det tennis potus; do
-for MODEL_NAME in occ_det; do
+for MODEL_NAME in potus; do
 
         echo "$MODEL_NAME"
 
-	echo "Running DADVI"
-	python fit_dadvi.py "$MODEL_NAME" "$TARGET_DIR"
+	# echo "Running DADVI"
+	# python fit_dadvi.py "$MODEL_NAME" "$TARGET_DIR"
 
-	if [ $MODEL_NAME == 'tennis' ]
-	then
-		echo "Computing the LRVB correction for 20 tennis matchups"
-		python compute_tennis_matchups.py \
-			--experiment-base-dir "$TARGET_DIR"
-	fi
+	# if [ $MODEL_NAME == 'tennis' ]
+	# then
+	# 	echo "Computing the LRVB correction for 20 tennis matchups"
+	# 	python compute_tennis_matchups.py \
+	# 		--experiment-base-dir "$TARGET_DIR"
+	# fi
 
-	if [ $MODEL_NAME == 'occ_det' ]
-	then
-		echo "Computing the LRVB correction for 20 species"
-		python compute_occu_predictions.py \
-			--experiment-base-dir "$TARGET_DIR"
-	fi
+	# if [ $MODEL_NAME == 'occ_det' ]
+	# then
+	# 	echo "Computing the LRVB correction for 20 species"
+	# 	python compute_occu_predictions.py \
+	# 		--experiment-base-dir "$TARGET_DIR"
+	# fi
 
+	# if [ $MODEL_NAME == 'potus' ]
+	# then
+	# 	echo "Computing the LRVB correction for the final vote share"
+	# 	python compute_potus_predictions.py \
+	# 		--experiment-base-dir "$TARGET_DIR"
+	# fi
 
 	# echo "Running NUTS"
 	# python fit_mcmc.py "$MODEL_NAME" "$TARGET_DIR"
@@ -55,18 +61,19 @@ for MODEL_NAME in occ_det; do
 
         # Run coverage
 	# for M in 8 16 32 64; do
+	for M in 16; do
 
-	# 	echo "Running with $M fixed draws"
+		echo "Running with $M fixed draws"
 
-	# 	python run_multiple_dadvi_no_doubling.py \
-	# 		--model-name "$MODEL_NAME" \
-	# 		--target-dir "$COVERAGE_TARGET_DIR" \
-	# 		--M $M \
-	# 		--n-reruns 2 \
-	# 		--warm-start
-	# 		# --n-reruns 100 \
+		python run_multiple_dadvi_no_doubling.py \
+			--model-name "$MODEL_NAME" \
+			--target-dir "$COVERAGE_TARGET_DIR" \
+			--M $M \
+			--n-reruns 2 \
+			--warm-start
+			# --n-reruns 100 \
 
-	# done;
+	done;
 
 	if [ $MODEL_NAME == 'tennis' ]
 	then
@@ -74,5 +81,21 @@ for MODEL_NAME in occ_det; do
 		python summarise_tennis_coverage.py \
 			--coverage-base-dir "$COVERAGE_TARGET_DIR"
 	fi
+
+	if [ $MODEL_NAME == 'occ_det' ]
+	then
+		echo "Computing the coverage summary for 20 species predictions"
+		python summarise_occu_coverage.py \
+			--coverage-base-dir "$COVERAGE_TARGET_DIR"
+	fi
+
+	if [ $MODEL_NAME == 'potus' ]
+	then
+		echo "Computing the coverage summary for the final vote share"
+		python summarise_potus_coverage.py \
+			--coverage-base-dir "$COVERAGE_TARGET_DIR"
+	fi
+
+
 
 done
