@@ -20,7 +20,6 @@ from argparse import ArgumentParser
 
 
 def pres_prob(params, sample_loc, species_id):
-
     logit_prob = (
         sample_loc @ params["w_env"][species_id] + params["intercept"][species_id][0]
     )
@@ -29,7 +28,6 @@ def pres_prob(params, sample_loc, species_id):
 
 
 def compute_distribution_from_draws(draws, function):
-
     chain_dim = draws[list(draws.keys())[0]].shape[:2]
 
     # Ditch the chain dim
@@ -43,12 +41,25 @@ def compute_distribution_from_draws(draws, function):
 
 
 parser = ArgumentParser()
-parser.add_argument('--experiment-base-dir', required=True, type=str,
-                    help='Directory containing the experimental results')
+parser.add_argument(
+    "--experiment-base-dir",
+    required=True,
+    type=str,
+    help="Directory containing the experimental results",
+)
+parser.add_argument(
+    "--n-species",
+    required=False,
+    type=int,
+    default=20,
+    help="The number of species to compute predictions for",
+)
 args = parser.parse_args()
 
 EXPERIMENT_BASE_DIR = args.experiment_base_dir
-OCCU_DADVI_PATH = os.path.join(args.experiment_base_dir, 'dadvi_results', 'dadvi_info', 'occ_det.pkl')
+OCCU_DADVI_PATH = os.path.join(
+    args.experiment_base_dir, "dadvi_results", "dadvi_info", "occ_det.pkl"
+)
 
 # Load occ_det results
 occ_res = pickle.load(open(OCCU_DADVI_PATH, "rb"))
@@ -66,24 +77,23 @@ dadvi_res = DADVIResult(
     dadvi_funs=dadvi_funs,
 )
 
-n_species = 2
+n_species = args.n_species
 
 np.random.seed(2)
-species_chosen = np.random.choice(occ_pickle["y_df"].shape[1], size=n_species, replace=False)
+species_chosen = np.random.choice(
+    occ_pickle["y_df"].shape[1], size=n_species, replace=False
+)
 
 sample_loc = occ_pickle["X_env_mat"][200]
 
-draw_files = glob(
-   f"{EXPERIMENT_BASE_DIR}/*/draw_dicts/occ_det.npz"
-)
+draw_files = glob(f"{EXPERIMENT_BASE_DIR}/*/draw_dicts/occ_det.npz")
 
 full_res = defaultdict(list)
 
-total_runtime = 0.
+total_runtime = 0.0
 total_hvp = 0
 
 for species_id in species_chosen:
-
     print(species_id)
 
     cur_fun = partial(pres_prob, species_id=species_id, sample_loc=sample_loc)
@@ -95,8 +105,8 @@ for species_id in species_chosen:
         )
     )
     cur_end_time = time()
-    total_runtime += (cur_end_time - cur_start_time)
-    total_hvp += cur_res['n_hvp_calls']
+    total_runtime += cur_end_time - cur_start_time
+    total_hvp += cur_res["n_hvp_calls"]
 
     cur_draws = np.random.normal(
         loc=cur_res["mean"], scale=cur_res["lrvb_sd"], size=1000
@@ -105,11 +115,10 @@ for species_id in species_chosen:
     full_res["lrvb_cg"].append(cur_draws.reshape(1, -1))
 
     for cur_file in draw_files:
-
         short_name = "_".join(cur_file.split("/")[-3].split("_")[:-1])
 
         # Skip if lrvb_cg -- recomputing
-        if short_name == 'lrvb_cg':
+        if short_name == "lrvb_cg":
             continue
 
         cur_loaded = dict(np.load(cur_file))
@@ -120,10 +129,9 @@ full_res = {x: np.stack(y, axis=-1) for x, y in full_res.items()}
 
 # Update the npzs with draws
 for cur_file in draw_files:
-
     short_name = "_".join(cur_file.split("/")[-3].split("_")[:-1])
 
-    if short_name == 'lrvb_cg':
+    if short_name == "lrvb_cg":
         continue
 
     cur_loaded = dict(np.load(cur_file))
@@ -131,9 +139,7 @@ for cur_file in draw_files:
     cur_loaded["presence_prediction"] = cur_result
     np.savez(cur_file, **cur_loaded)
 
-target_folder = (
-    f"{EXPERIMENT_BASE_DIR}/lrvb_cg_results/draw_dicts/"
-)
+target_folder = f"{EXPERIMENT_BASE_DIR}/lrvb_cg_results/draw_dicts/"
 
 os.makedirs(target_folder, exist_ok=True)
 np.savez(
@@ -142,14 +148,12 @@ np.savez(
 
 # Save the runtime etc also
 runtime_cost = {
-        'lrvb_hvp_calls': total_hvp,
-        'lrvb_runtime': total_runtime,
-        **get_run_datetime_and_hostname()
+    "lrvb_hvp_calls": total_hvp,
+    "lrvb_runtime": total_runtime,
+    **get_run_datetime_and_hostname(),
 }
 
-target_folder = (
-    f"{EXPERIMENT_BASE_DIR}/lrvb_cg_results/lrvb_cg_info/"
-)
+target_folder = f"{EXPERIMENT_BASE_DIR}/lrvb_cg_results/lrvb_cg_info/"
 
 os.makedirs(target_folder, exist_ok=True)
 

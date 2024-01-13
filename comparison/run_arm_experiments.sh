@@ -1,4 +1,5 @@
 # This script runs the experiments for the ARM models
+# It does this by reading the ARM model names from a file, and piping them into a bash loop.
 TARGET_DIR='./experiment_runs/december_2023'
 COVERAGE_TARGET_DIR='./experiment_runs/coverage/'
 
