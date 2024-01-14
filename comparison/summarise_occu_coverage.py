@@ -5,12 +5,18 @@ from dadvi.jax import build_dadvi_funs
 from dadvi.pymc.jax_api import DADVIResult
 import numpy as np
 from glob import glob
-from tqdm.notebook import tqdm
+from tqdm import tqdm
 from functools import partial
 import pandas as pd
 from utils import get_occ_det_model_from_pickle
 from config import OCC_DET_PICKLE_PATH
+from coverage_helpers import add_columns, save_dfs_by_M
+from argparse import ArgumentParser
 
+
+parser = ArgumentParser()
+parser.add_argument('--coverage-base-dir', required=True)
+args = parser.parse_args()
 
 model = get_occ_det_model_from_pickle(OCC_DET_PICKLE_PATH)
 occ_pickle = pickle.load(open(OCC_DET_PICKLE_PATH, "rb"))
@@ -20,12 +26,8 @@ jax_funs = get_jax_functions_from_pymc(model)
 dadvi_funs = build_dadvi_funs(jax_funs["log_posterior_fun"])
 
 reruns = glob(
-    "/Users/martin.ingram/Projects/PhD/dadvi_experiments/comparison/big_model_coverage/march_2023_coverage/*/occ_det/*.pkl"
-    # "/home/martin.ingram/experiment_runs/march_2023_coverage/*/occ_det/*.pkl"
+    os.path.join(args.coverage_base_dir, '*', 'occ_det', '*.pkl')
 )
-
-target_dir = "./big_model_coverage/summaries/occ_det/"
-# target_dir = "/home/martin.ingram/experiment_runs/coverage_summaries_big_models"
 
 
 def pres_prob(params, sample_loc, species_id):
@@ -39,8 +41,10 @@ def pres_prob(params, sample_loc, species_id):
 # Load occ_det results
 occ_pickle = pickle.load(open(OCC_DET_PICKLE_PATH, "rb"))
 
+n_species = 20
+
 np.random.seed(2)
-species_chosen = np.random.choice(occ_pickle["y_df"].shape[1], size=20, replace=False)
+species_chosen = np.random.choice(occ_pickle["y_df"].shape[1], size=n_species, replace=False)
 
 sample_loc = occ_pickle["X_env_mat"][200]
 
@@ -95,19 +99,12 @@ def compute_quantities(occu_res, dadvi_res):
 
 full_results = list()
 
-os.makedirs(target_dir, exist_ok=True)
-
 for cur_rerun in tqdm(reruns):
     print(cur_rerun)
 
     split_path = cur_rerun.split('/')
     m_num = split_path[-3]
     rerun_num = split_path[-1].split('.')[0]
-    target_file = os.path.join(target_dir, f'{m_num}_{rerun_num}.pkl')
-
-    if os.path.isfile(target_file):
-        print('Already exists; skipping.')
-        continue
 
     occu_res, dadvi_res = build_dadvi_res(cur_rerun)
 
@@ -123,4 +120,20 @@ for cur_rerun in tqdm(reruns):
 
     quantities["filename"] = cur_rerun
 
-    pickle.dump(quantities, open(target_file, 'wb'))
+    full_results.append(quantities)
+
+result = pd.DataFrame(full_results)
+
+# Add naming
+names = ['presence_prediction' for _ in range(n_species)]
+indices = list(range(n_species))
+
+names_repeated = [names for _ in range(result.shape[0])]
+indices_repeated = [indices for _ in range(result.shape[0])]
+
+result['names'] = names_repeated
+result['indices'] = indices_repeated
+
+result = add_columns(result)
+
+save_dfs_by_M(result, 'occ_det', args.coverage_base_dir)

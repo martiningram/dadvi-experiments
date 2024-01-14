@@ -33,8 +33,16 @@ def compute_distribution_from_draws(draws, function):
 
 if __name__ == '__main__':
 
-    EXPERIMENT_BASE_DIR = '/home/martin.ingram/experiment_runs/march_2023'
-    TENNIS_PICKLE_FILE = "/home/martin.ingram/experiment_runs/march_2023/dadvi_results/dadvi_info/tennis.pkl"
+    from argparse import ArgumentParser
+
+    parser = ArgumentParser()
+    parser.add_argument('--experiment-base-dir', required=True, type=str,
+                        help='Directory containing the experimental results')
+    args = parser.parse_args()
+
+    EXPERIMENT_BASE_DIR = args.experiment_base_dir
+    TENNIS_PICKLE_FILE = os.path.join(EXPERIMENT_BASE_DIR, 'dadvi_results', 'dadvi_info', 'tennis.pkl')
+
     tennis_res = pickle.load(open(TENNIS_PICKLE_FILE, "rb"))
     tennis_model = fetch_tennis_model(1969, sackmann_dir=SACKMANN_DIR)
     model = tennis_model["model"]
@@ -68,6 +76,7 @@ if __name__ == '__main__':
     total_runtime = 0.
     total_hvp = 0
 
+    # For DADVI, we use the LRVB correction using the delta method
     for cur_p1, cur_p2 in pairs:
 
         p1_id, p2_id = encoder.transform([cur_p1, cur_p2])
@@ -89,6 +98,7 @@ if __name__ == '__main__':
             loc=lrvb_differences["mean"], scale=lrvb_differences["lrvb_sd"], size=1000
         ).reshape(1, -1)
 
+    # For the others, we just compute using the draws
     for cur_p1, cur_p2 in pairs:
 
         p1_id, p2_id = encoder.transform([cur_p1, cur_p2])
