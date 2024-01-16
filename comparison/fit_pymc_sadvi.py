@@ -20,10 +20,20 @@ from dadvi.jax import build_dadvi_funs
 from utils import get_run_datetime_and_hostname
 
 if __name__ == "__main__":
+    from fitting_helpers import get_parser_with_default_args
 
-    model_name = sys.argv[1]
-    target_dir = sys.argv[2]
-    method = sys.argv[3]
+    parser = get_parser_with_default_args()
+    parser.add_argument("--advi-method", required=True)
+    args, _ = parser.parse_known_args()
+
+    model_name = args.model_name
+    target_dir = args.target_dir
+    method = args.advi_method
+    test_run = args.test_run
+
+    n_draws = 10 if test_run else 1000
+    n_steps = 10 if test_run else 100000
+
     model = load_model_by_name(model_name)
 
     print("Fitting")
@@ -32,8 +42,8 @@ if __name__ == "__main__":
     with model as m:
         fit_result_sadvi = fit_pymc_sadvi(
             m,
-            n_draws=1000,
-            n_steps=100000,
+            n_draws=n_draws,
+            n_steps=n_draws,
             method=method,
             convergence_crit="default",
             extra_callbacks=[pymc_advi_history_callback],

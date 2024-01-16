@@ -10,17 +10,26 @@ import arviz as az
 from utils import get_run_datetime_and_hostname
 
 if __name__ == "__main__":
-
     import multiprocessing
+    from fitting_helpers import parse_default_args
 
     multiprocessing.set_start_method("fork")
 
     import pymc as pm
     from utils import load_model_by_name, arviz_to_draw_dict
 
-    model_name = sys.argv[1]
-    target_dir = sys.argv[2]
+    args = parse_default_args()
+
+    model_name = args.model_name
+    target_dir = args.target_dir
+    test_run = args.test_run
+
     model = load_model_by_name(model_name)
+
+    if test_run:
+        extra_args = {"tune": 10, "draws": 10}
+    else:
+        extra_args = {}
 
     print("Fitting")
     start_time = time.time()
@@ -30,14 +39,10 @@ if __name__ == "__main__":
         # Microcredit strangely is killed on its third chain, so run only two.
         if model_name == "microcredit":
             num_chains = 2
-            fit_result_nuts = pm.sample(cores=1, chains=num_chains)
+            fit_result_nuts = pm.sample(cores=1, chains=num_chains, **extra_args)
         else:
             num_chains = 4
-            fit_result_nuts = pm.sample(cores=1, chains=num_chains)
-        # if model_name in ['potus', 'occ_det']:
-        # else:
-        #     # Use the defaults
-        #     fit_result_nuts = pm.sample()
+            fit_result_nuts = pm.sample(cores=1, chains=num_chains, **extra_args)
 
     end_time = time.time()
     runtime = end_time - start_time

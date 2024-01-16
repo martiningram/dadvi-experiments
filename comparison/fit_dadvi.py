@@ -22,10 +22,13 @@ from os import makedirs
 from os.path import join
 import pickle
 from utils import get_run_datetime_and_hostname
+from fitting_helpers import parse_default_args
 
 
-model_name = sys.argv[1]
-target_dir = sys.argv[2]
+args = parse_default_args()
+
+model_name = args.model_name
+target_dir = args.target_dir
 m = load_model_by_name(model_name)
 
 # This will store the sequence of parameters
@@ -33,6 +36,7 @@ opt_callback_fun.opt_sequence = []
 
 M = 30
 seed = 2
+maxiter = 3 if args.test_run else None
 np.random.seed(seed)
 
 start_time = time.time()
@@ -48,6 +52,7 @@ opt = find_dadvi_optimum(
     dadvi_funs=dadvi_funs,
     verbose=True,
     callback_fun=opt_callback_fun,
+    maxiter=maxiter,
 )
 finish_time = time.time()
 

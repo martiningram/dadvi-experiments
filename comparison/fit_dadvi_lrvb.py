@@ -26,10 +26,16 @@ from dadvi.optimization import count_decorator
 
 
 if __name__ == "__main__":
+    from fitting_helpers import get_parser_with_default_args
 
-    model_name = sys.argv[1]
-    target_dir = sys.argv[2]
-    lrvb_method = sys.argv[3]
+    parser = get_parser_with_default_args()
+    parser.add_argument("--lrvb-method", required=True)
+    args, _ = parser.parse_known_args()
+
+    model_name = args.model_name
+    target_dir = args.target_dir
+    lrvb_method = args.lrvb_method
+
     m = load_model_by_name(model_name)
 
     assert lrvb_method in [
@@ -43,6 +49,7 @@ if __name__ == "__main__":
     M = 30
     seed = 2
     np.random.seed(seed)
+    maxiter = 3 if args.test_run else None
 
     start_time = time.time()
     jax_funs = get_jax_functions_from_pymc(m)
@@ -57,6 +64,7 @@ if __name__ == "__main__":
         dadvi_funs=dadvi_funs,
         verbose=True,
         callback_fun=opt_callback_fun,
+        maxiter=maxiter,
     )
     dadvi_res = opt["opt_result"].x
 
