@@ -19,10 +19,14 @@ from os.path import join
 import pickle
 from dadvi.pymc.utils import get_unconstrained_variable_names
 from utils import get_run_datetime_and_hostname
+from fitting_helpers import parse_default_args
 
 
-model_name = sys.argv[1]
-target_dir = sys.argv[2]
+args = parse_default_args()
+
+model_name = args.model_name
+target_dir = args.target_dir
+
 m = load_model_by_name(model_name)
 seed = 2
 
@@ -34,11 +38,16 @@ init_means = np.zeros(jax_funs["n_params"])
 init_log_vars = np.zeros(jax_funs["n_params"]) - 3
 init_var_params = np.concatenate([init_means, init_log_vars])
 
-num_mc_samples = 50
+if args.test_run:
+    num_mc_samples = 5
+    n_iters = 100
+else:
+    num_mc_samples = 50
+    n_iters = 20000
 
 start_time = time.time()
 viabel_result = fit_pymc_model_with_viabel(
-    m, num_mc_samples=num_mc_samples, init_var_param=init_var_params, n_iters=20000
+    m, num_mc_samples=num_mc_samples, init_var_param=init_var_params, n_iters=n_iters
 )
 end_time = time.time()
 runtime_viabel = end_time - start_time

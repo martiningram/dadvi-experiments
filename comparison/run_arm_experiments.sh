@@ -6,8 +6,10 @@ TEST_RUN=true
 
 if [ "$TEST_RUN" = true ] ; then
 	ADDED_ARGS='--test-run'
+    N_RERUNS=1
 else 
 	ADDED_ARGS=''
+    N_RERUNS=100
 fi
 
 while read MODEL_NAME; do
@@ -52,10 +54,12 @@ while read MODEL_NAME; do
             --advi-method fullrank_advi \
 	        ${TEST_RUN:+"$ADDED_ARGS"}
 
-    break
+    if [ "$TEST_RUN" = false ] ; then
 
-    echo "Running doubling DADVI"
-    python fit_doubling_dadvi_lrvb.py "$MODEL_NAME" "$TARGET_DIR" 0.25
+        echo "Running doubling DADVI"
+        python fit_doubling_dadvi_lrvb.py "$MODEL_NAME" "$TARGET_DIR" 0.25
+
+    fi
 
     echo "Running coverage experiments"
     # Run coverage
@@ -64,11 +68,14 @@ while read MODEL_NAME; do
         	--model-name "$MODEL_NAME" \
         	--target-dir "$COVERAGE_TARGET_DIR" \
         	--min-m-power $min_m_power \
-        	--n-reruns 100 \
+        	--n-reruns $N_RERUNS \
         	--warm-start
     done;
 
     echo "Running RAABBVI"
-    python fit_raabbvi.py "$MODEL_NAME" "$TARGET_DIR"
+    python fit_raabbvi.py \
+            --model-name "$MODEL_NAME" \
+            --target-dir "$TARGET_DIR" \
+	        ${TEST_RUN:+"$ADDED_ARGS"}
 
 done < all_arm_names.txt
