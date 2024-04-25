@@ -21,11 +21,19 @@ parser.add_argument("--M", required=True, type=int)
 parser.add_argument("--target-dir", required=True, type=str)
 parser.add_argument("--n-reruns", required=False, type=int, default=100)
 parser.add_argument("--warm-start", required=False, action="store_true")
-args = parser.parse_args()
+parser.add_argument(
+    "--test-run",
+    required=False,
+    default=False,
+    action="store_true",
+    help="If provided, fitting is terminated early for testing purposes.",
+)
+args, _ = parser.parse_known_args()
 
 model_name = args.model_name
 n_reruns = args.n_reruns
 M = args.M
+maxiter = 3 if args.test_run else None
 
 m = load_model_by_name(model_name)
 
@@ -49,6 +57,7 @@ opt_result = find_dadvi_optimum(
     init_var_params,
     zs,
     dadvi_funs,
+    maxiter=maxiter
 )
 
 # Get the results from our reference run:
@@ -74,7 +83,8 @@ while completed_runs < n_reruns:
         rerun_var_params = init_var_params
 
     try:
-        result = find_dadvi_optimum(rerun_var_params, cur_z, dadvi_funs=dadvi_funs)
+        result = find_dadvi_optimum(rerun_var_params, cur_z,
+                                    dadvi_funs=dadvi_funs, maxiter=maxiter)
     except Exception as e:
         print(f"Optimisation failed with error: {e}")
         print(f"Retrying with new seed.")

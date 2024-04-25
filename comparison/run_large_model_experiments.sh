@@ -1,5 +1,14 @@
-TARGET_DIR='./experiment_runs/december_2023/'
-COVERAGE_TARGET_DIR='./experiment_runs/coverage/'
+TARGET_DIR='./experiment_runs/april_2024/'
+COVERAGE_TARGET_DIR='./experiment_runs/april_2024/coverage/'
+TEST_RUN=true
+
+if [ "$TEST_RUN" = true ] ; then
+	ADDED_ARGS='--test-run'
+    N_RERUNS=1
+else 
+	ADDED_ARGS=''
+    N_RERUNS=100
+fi
 
 # Check tennis data exists and fetch it if not
 if [ ! -f ./data/tennis_atp/atp_players.csv ]; then
@@ -11,8 +20,12 @@ for MODEL_NAME in microcredit occ_det tennis potus; do
 
         echo "$MODEL_NAME"
 
-	echo "Running DADVI"
-	python fit_dadvi.py "$MODEL_NAME" "$TARGET_DIR"
+        echo "Running DADVI"
+        python fit_dadvi.py \
+    	    --model-name "$MODEL_NAME" \
+    	    --target-dir "$TARGET_DIR" \
+    	    ${TEST_RUN:+"$ADDED_ARGS"}
+    
 
 	### Make draws from LRVB corrected posterior distributions
 
@@ -44,27 +57,47 @@ for MODEL_NAME in microcredit occ_det tennis potus; do
 	### Run comparison models
 
 	echo "Running NUTS"
-	python fit_mcmc.py "$MODEL_NAME" "$TARGET_DIR"
-
+        python fit_mcmc.py \
+    	    --model-name "$MODEL_NAME" \
+    	    --target-dir "$TARGET_DIR" \
+    	    ${TEST_RUN:+"$ADDED_ARGS"}
+    
 	echo "Running SADVI mean field"
-	python fit_pymc_sadvi.py "$MODEL_NAME" "$TARGET_DIR" advi
-
-	echo "Running RAABBVI"
-	python fit_raabbvi.py "$MODEL_NAME" "$TARGET_DIR"
+        python fit_pymc_sadvi.py \
+                --model-name "$MODEL_NAME" \
+                --target-dir "$TARGET_DIR" \
+                --advi-method advi \
+    	        ${TEST_RUN:+"$ADDED_ARGS"}
+    
+        echo "Running RAABBVI"
+        python fit_raabbvi.py \
+                --model-name "$MODEL_NAME" \
+                --target-dir "$TARGET_DIR" \
+    	        ${TEST_RUN:+"$ADDED_ARGS"}
 
 	# POTUS is so big that we don't even attempt to run some of the models:
 	if [ $MODEL_NAME != 'potus' ]
 	then
 		echo "Running bigger models also."
+	        if [ "$TEST_RUN" = false ] ; then
 
-		echo "Running doubling DADVI"
-		python fit_doubling_dadvi_lrvb.py "$MODEL_NAME" "$TARGET_DIR" 0.25
+			# TODO: Work out how to do the test run here;
+			# it doesn't work because the matrix has to be positive definite
 
-		echo "Running LRVB Direct"
-		python fit_dadvi_lrvb.py "$MODEL_NAME" "$TARGET_DIR" Direct
+			echo "Running doubling DADVI"
+			python fit_doubling_dadvi_lrvb.py "$MODEL_NAME" "$TARGET_DIR" 0.25
+
+			echo "Running LRVB Direct"
+			python fit_dadvi_lrvb.py "$MODEL_NAME" "$TARGET_DIR" Direct
+
+		fi
 
 		echo "Running PyMC SADVI Full rank"
-		python fit_pymc_sadvi.py "$MODEL_NAME" "$TARGET_DIR" fullrank_advi
+		python fit_pymc_sadvi.py\
+		       	--model-name "$MODEL_NAME" \
+			--target-dir "$TARGET_DIR" \
+			--advi-method fullrank_advi \
+			   ${TEST_RUN:+"$ADDED_ARGS"}
 	fi
 
 	### COVERAGE EXPERIMENTS
@@ -80,7 +113,8 @@ for MODEL_NAME in microcredit occ_det tennis potus; do
 			--target-dir "$COVERAGE_TARGET_DIR" \
 			--M $M \
 			--n-reruns 100 \
-			--warm-start
+			--warm-start \
+			${TEST_RUN:+"$ADDED_ARGS"}
 	done;
 
 	# For these big models, we care only about the coverage regarding the
