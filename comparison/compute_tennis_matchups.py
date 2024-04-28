@@ -31,17 +31,24 @@ def compute_distribution_from_draws(draws, function):
     return results
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
     from argparse import ArgumentParser
 
     parser = ArgumentParser()
-    parser.add_argument('--experiment-base-dir', required=True, type=str,
-                        help='Directory containing the experimental results')
-    args = parser.parse_args()
+    parser.add_argument(
+        "--experiment-base-dir",
+        required=True,
+        type=str,
+        help="Directory containing the experimental results",
+    )
+    parser.add_argument("--test-run", required=False, action="store_true")
+    args, _ = parser.parse_known_args()
 
     EXPERIMENT_BASE_DIR = args.experiment_base_dir
-    TENNIS_PICKLE_FILE = os.path.join(EXPERIMENT_BASE_DIR, 'dadvi_results', 'dadvi_info', 'tennis.pkl')
+    TENNIS_PICKLE_FILE = os.path.join(
+        EXPERIMENT_BASE_DIR, "dadvi_results", "dadvi_info", "tennis.pkl"
+    )
 
     tennis_res = pickle.load(open(TENNIS_PICKLE_FILE, "rb"))
     tennis_model = fetch_tennis_model(1969, sackmann_dir=SACKMANN_DIR)
@@ -49,6 +56,7 @@ if __name__ == '__main__':
     jax_funs = get_jax_functions_from_pymc(model)
     dadvi_funs = build_dadvi_funs(jax_funs["log_posterior_fun"])
     encoder = tennis_model["encoder"]
+    cg_maxiter = 10 if args.test_run else None
 
     dadvi_res = DADVIResult(
         tennis_res["fixed_draws"],
@@ -63,17 +71,14 @@ if __name__ == '__main__':
         [x for x in encoder.classes_ if x not in p1_choices], size=20, replace=False
     )
 
-
-    draw_files = glob(
-       f"{EXPERIMENT_BASE_DIR}/*/draw_dicts/tennis.npz"
-    )
+    draw_files = glob(f"{EXPERIMENT_BASE_DIR}/*/draw_dicts/tennis.npz")
 
     pairs = [*zip(p1_choices, p2_choices)]
 
     lrvb_results = dict()
     draw_results = defaultdict(dict)
 
-    total_runtime = 0.
+    total_runtime = 0.0
     total_hvp = 0
 
     # For DADVI, we use the LRVB correction using the delta method
@@ -84,12 +89,13 @@ if __name__ == '__main__':
         cur_start_time = time()
         lrvb_differences = (
             dadvi_res.get_frequentist_sd_and_lrvb_correction_of_scalar_valued_function(
-                partial(skill_difference, p1_id=p1_id, p2_id=p2_id)
+                partial(skill_difference, p1_id=p1_id, p2_id=p2_id),
+                cg_maxiter=cg_maxiter,
             )
         )
         cur_end_time = time()
-        total_runtime += (cur_end_time - cur_start_time)
-        total_hvp += lrvb_differences['n_hvp_calls']
+        total_runtime += cur_end_time - cur_start_time
+        total_hvp += lrvb_differences["n_hvp_calls"]
 
         lrvb_results[f"{cur_p1} vs {cur_p2}"] = lrvb_differences
 
@@ -107,7 +113,7 @@ if __name__ == '__main__':
 
             short_name = "_".join(cur_file.split("/")[-3].split("_")[:-1])
 
-            if short_name == 'lrvb_cg':
+            if short_name == "lrvb_cg":
                 continue
 
             cur_loaded = np.load(cur_file)
@@ -134,7 +140,7 @@ if __name__ == '__main__':
     # Add these to the draw dicts
     for cur_file in draw_files:
 
-        if short_name == 'lrvb_cg':
+        if short_name == "lrvb_cg":
             continue
 
         cur_loaded = dict(np.load(cur_file))
@@ -145,26 +151,23 @@ if __name__ == '__main__':
         np.savez(cur_file, **cur_loaded)
 
     # Make a final one for lrvb_cg
-    target_dir = (
-        f"{EXPERIMENT_BASE_DIR}/lrvb_cg_results/draw_dicts/"
-    )
+    target_dir = f"{EXPERIMENT_BASE_DIR}/lrvb_cg_results/draw_dicts/"
 
     os.makedirs(target_dir, exist_ok=True)
 
     np.savez(
-        os.path.join(target_dir, "tennis.npz"), match_predictions=methods_stacked["lrvb_cg"]
+        os.path.join(target_dir, "tennis.npz"),
+        match_predictions=methods_stacked["lrvb_cg"],
     )
 
     # Save the runtime etc also
     runtime_cost = {
-            'lrvb_hvp_calls': total_hvp,
-            'lrvb_runtime': total_runtime,
-            **get_run_datetime_and_hostname()
+        "lrvb_hvp_calls": total_hvp,
+        "lrvb_runtime": total_runtime,
+        **get_run_datetime_and_hostname(),
     }
 
-    target_folder = (
-        f"{EXPERIMENT_BASE_DIR}/lrvb_cg_results/lrvb_cg_info/"
-    )
+    target_folder = f"{EXPERIMENT_BASE_DIR}/lrvb_cg_results/lrvb_cg_info/"
 
     os.makedirs(target_folder, exist_ok=True)
 

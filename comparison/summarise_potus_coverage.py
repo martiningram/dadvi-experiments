@@ -16,9 +16,11 @@ from argparse import ArgumentParser
 
 
 parser = ArgumentParser()
-parser.add_argument('--coverage-base-dir', required=True)
-args = parser.parse_args()
+parser.add_argument("--coverage-base-dir", required=True)
+parser.add_argument("--test-run", required=False, action="store_true")
+args, _ = parser.parse_known_args()
 
+cg_maxiter = 10 if args.test_run else None
 model = get_potus_model(POTUS_JSON_PATH)
 potus_data = json.load(open(POTUS_JSON_PATH))
 np_data = {x: np.squeeze(np.array(y)) for x, y in potus_data.items()}
@@ -39,9 +41,8 @@ cholesky_ss_cov_mu_b_T = np.linalg.cholesky(ss_cov_mu_b_T)
 jax_funs = get_jax_functions_from_pymc(model)
 dadvi_funs = build_dadvi_funs(jax_funs["log_posterior_fun"])
 
-reruns = glob(
-    os.path.join(args.coverage_base_dir, '*', 'potus', '*.pkl')
-)
+reruns = glob(os.path.join(args.coverage_base_dir, "*", "potus", "*.pkl"))
+
 
 def compute_final_vote_share(params):
     rel_means = params["raw_mu_b_T"]
@@ -70,7 +71,7 @@ def compute_quantities(occu_res, dadvi_res):
 
     lrvb_res = (
         dadvi_res.get_frequentist_sd_and_lrvb_correction_of_scalar_valued_function(
-            cur_fun
+            cur_fun, cg_maxiter=cg_maxiter
         )
     )
 
@@ -102,18 +103,18 @@ full_results = list()
 for cur_rerun in tqdm(reruns):
     potus_res, dadvi_res = build_dadvi_res(cur_rerun)
 
-    split_path = cur_rerun.split('/')
+    split_path = cur_rerun.split("/")
     m_num = split_path[-3]
-    rerun_num = split_path[-1].split('.')[0]
+    rerun_num = split_path[-1].split(".")[0]
 
-    if potus_res['z'].shape[0] < 10:
+    if potus_res["z"].shape[0] < 10:
         continue
 
     try:
         quantities = compute_quantities(potus_res, dadvi_res)
     except Exception as e:
         print(e)
-        print(f'Failed to compute {cur_rerun}. Skipping.')
+        print(f"Failed to compute {cur_rerun}. Skipping.")
         continue
     quantities["filename"] = cur_rerun
 
@@ -123,15 +124,15 @@ for cur_rerun in tqdm(reruns):
 result = pd.DataFrame(full_results)
 
 # Add naming
-names = ['final_vote_share' for _ in range(1)]
+names = ["final_vote_share" for _ in range(1)]
 indices = list(range(1))
 
 names_repeated = [names for _ in range(result.shape[0])]
 indices_repeated = [indices for _ in range(result.shape[0])]
 
-result['names'] = names_repeated
-result['indices'] = indices_repeated
+result["names"] = names_repeated
+result["indices"] = indices_repeated
 
 result = add_columns(result)
 
-save_dfs_by_M(result, 'potus', args.coverage_base_dir)
+save_dfs_by_M(result, "potus", args.coverage_base_dir)

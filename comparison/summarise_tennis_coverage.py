@@ -14,18 +14,18 @@ from argparse import ArgumentParser
 from coverage_helpers import add_columns, save_dfs_by_M
 
 parser = ArgumentParser()
-parser.add_argument('--coverage-base-dir', required=True)
-args = parser.parse_args()
+parser.add_argument("--coverage-base-dir", required=True)
+parser.add_argument("--test-run", required=False, action="store_true")
+args, _ = parser.parse_known_args()
 
+cg_maxiter = 10 if args.test_run else None
 tennis_model = fetch_tennis_model(1969, sackmann_dir=SACKMANN_DIR)
 model = tennis_model["model"]
 jax_funs = get_jax_functions_from_pymc(model)
 dadvi_funs = build_dadvi_funs(jax_funs["log_posterior_fun"])
 encoder = tennis_model["encoder"]
 
-reruns = glob(
-    os.path.join(args.coverage_base_dir, '*', 'tennis', '*.pkl')
-)
+reruns = glob(os.path.join(args.coverage_base_dir, "*", "tennis", "*.pkl"))
 
 n_pairs = 20
 
@@ -66,7 +66,8 @@ def compute_quantities(tennis_res, dadvi_res):
 
         lrvb_differences = (
             dadvi_res.get_frequentist_sd_and_lrvb_correction_of_scalar_valued_function(
-                partial(skill_difference, p1_id=p1_id, p2_id=p2_id)
+                partial(skill_difference, p1_id=p1_id, p2_id=p2_id),
+                cg_maxiter=cg_maxiter,
             )
         )
 
@@ -96,7 +97,7 @@ def compute_quantities(tennis_res, dadvi_res):
 full_results = list()
 
 for i, cur_rerun in tqdm(enumerate(reruns)):
-    print(f'Rerun {i}')
+    print(f"Rerun {i}")
     tennis_res, dadvi_res = build_dadvi_res(cur_rerun)
     quantities = compute_quantities(tennis_res, dadvi_res)
     quantities["filename"] = cur_rerun
@@ -106,15 +107,15 @@ for i, cur_rerun in tqdm(enumerate(reruns)):
 result = pd.DataFrame(full_results)
 
 # Add naming
-names = ['match_predictions' for _ in range(n_pairs)]
+names = ["match_predictions" for _ in range(n_pairs)]
 indices = list(range(n_pairs))
 
 names_repeated = [names for _ in range(result.shape[0])]
 indices_repeated = [indices for _ in range(result.shape[0])]
 
-result['names'] = names_repeated
-result['indices'] = indices_repeated
+result["names"] = names_repeated
+result["indices"] = indices_repeated
 
 result = add_columns(result)
 
-save_dfs_by_M(result, 'tennis', args.coverage_base_dir)
+save_dfs_by_M(result, "tennis", args.coverage_base_dir)

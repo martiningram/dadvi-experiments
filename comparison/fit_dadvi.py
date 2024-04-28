@@ -37,6 +37,7 @@ opt_callback_fun.opt_sequence = []
 M = 30
 seed = 2
 maxiter = 3 if args.test_run else None
+compute_convergence_checks = not args.test_run
 np.random.seed(seed)
 
 start_time = time.time()
@@ -53,6 +54,7 @@ opt = find_dadvi_optimum(
     verbose=True,
     callback_fun=opt_callback_fun,
     maxiter=maxiter,
+    compute_convergence_checks=compute_convergence_checks,
 )
 finish_time = time.time()
 
@@ -98,9 +100,10 @@ with open(join(target_dir, "dadvi_info", model_name + ".pkl"), "wb") as f:
             "kl_stderr_hist": kl_sd_dadvi,
             "opt_sequence": dadvi_opt_sequence,
             "runtime": runtime_dadvi,
-            "newton_step_norm": opt["newton_step_norm"],
-            "newton_step": opt["newton_step"],
+            "newton_step_norm": opt.get("newton_step_norm", None),
+            "newton_step": opt.get("newton_step", None),
             "unconstrained_param_names": get_unconstrained_variable_names(m),
+            "test_run": args.test_run,
             **get_run_datetime_and_hostname(),
         },
         f,

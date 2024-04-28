@@ -32,17 +32,26 @@ def compute_distribution_from_draws(draws, function):
     return results
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
     from argparse import ArgumentParser
 
     parser = ArgumentParser()
-    parser.add_argument('--experiment-base-dir', required=True, type=str,
-                        help='Directory containing the experimental results')
-    args = parser.parse_args()
+    parser.add_argument(
+        "--experiment-base-dir",
+        required=True,
+        type=str,
+        help="Directory containing the experimental results",
+    )
+    parser.add_argument("--test-run", required=False, action="store_true")
+    args, _ = parser.parse_known_args()
 
     EXPERIMENT_BASE_DIR = args.experiment_base_dir
-    POTUS_DADVI_PATH = os.path.join(EXPERIMENT_BASE_DIR, 'dadvi_results', 'dadvi_info', 'potus.pkl')
+    POTUS_DADVI_PATH = os.path.join(
+        EXPERIMENT_BASE_DIR, "dadvi_results", "dadvi_info", "potus.pkl"
+    )
+
+    cg_maxiter = 10 if args.test_run else None
 
     # Load occ_det results
     occ_res = pickle.load(open(POTUS_DADVI_PATH, "rb"))
@@ -62,14 +71,12 @@ if __name__ == '__main__':
     )
     cholesky_ss_cov_mu_b_T = np.linalg.cholesky(ss_cov_mu_b_T)
 
-
     def compute_final_vote_share(params):
         rel_means = params["raw_mu_b_T"]
 
         mean_shares = cholesky_ss_cov_mu_b_T @ rel_means + np_data["mu_b_prior"]
 
         return expit(mean_shares) @ np_data["state_weights"]
-
 
     # Get the JAX functions
     jax_funs = get_jax_functions_from_pymc(model)
@@ -92,14 +99,18 @@ if __name__ == '__main__':
     cur_fun = compute_final_vote_share
 
     cur_start_time = time()
-    cur_res = dadvi_res.get_frequentist_sd_and_lrvb_correction_of_scalar_valued_function(
-        cur_fun
+    cur_res = (
+        dadvi_res.get_frequentist_sd_and_lrvb_correction_of_scalar_valued_function(
+            cur_fun, cg_maxiter=cg_maxiter
+        )
     )
     cur_end_time = time()
     total_runtime += cur_end_time - cur_start_time
     total_hvp += cur_res["n_hvp_calls"]
 
-    cur_draws = np.random.normal(loc=cur_res["mean"], scale=cur_res["lrvb_sd"], size=1000)
+    cur_draws = np.random.normal(
+        loc=cur_res["mean"], scale=cur_res["lrvb_sd"], size=1000
+    )
 
     full_res["lrvb_cg"].append(cur_draws.reshape(1, -1))
 
@@ -131,7 +142,9 @@ if __name__ == '__main__':
     target_folder = f"{EXPERIMENT_BASE_DIR}/lrvb_cg_results/draw_dicts/"
 
     os.makedirs(target_folder, exist_ok=True)
-    np.savez(os.path.join(target_folder, "potus.npz"), final_vote_share=full_res["lrvb_cg"])
+    np.savez(
+        os.path.join(target_folder, "potus.npz"), final_vote_share=full_res["lrvb_cg"]
+    )
 
     # Save the runtime etc also
     runtime_cost = {

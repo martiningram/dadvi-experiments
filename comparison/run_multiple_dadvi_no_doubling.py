@@ -34,6 +34,7 @@ model_name = args.model_name
 n_reruns = args.n_reruns
 M = args.M
 maxiter = 3 if args.test_run else None
+compute_convergence_checks = not args.test_run
 
 m = load_model_by_name(model_name)
 
@@ -57,7 +58,8 @@ opt_result = find_dadvi_optimum(
     init_var_params,
     zs,
     dadvi_funs,
-    maxiter=maxiter
+    maxiter=maxiter,
+    compute_convergence_checks=compute_convergence_checks,
 )
 
 # Get the results from our reference run:
@@ -83,8 +85,13 @@ while completed_runs < n_reruns:
         rerun_var_params = init_var_params
 
     try:
-        result = find_dadvi_optimum(rerun_var_params, cur_z,
-                                    dadvi_funs=dadvi_funs, maxiter=maxiter)
+        result = find_dadvi_optimum(
+            rerun_var_params,
+            cur_z,
+            dadvi_funs=dadvi_funs,
+            maxiter=maxiter,
+            compute_convergence_checks=compute_convergence_checks,
+        )
     except Exception as e:
         print(f"Optimisation failed with error: {e}")
         print(f"Retrying with new seed.")

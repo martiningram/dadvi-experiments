@@ -4,10 +4,8 @@ TEST_RUN=true
 
 if [ "$TEST_RUN" = true ] ; then
 	ADDED_ARGS='--test-run'
-    N_RERUNS=1
 else 
 	ADDED_ARGS=''
-    N_RERUNS=100
 fi
 
 # Check tennis data exists and fetch it if not
@@ -36,21 +34,24 @@ for MODEL_NAME in microcredit occ_det tennis potus; do
 	then
 		echo "Computing the LRVB correction for 20 tennis matchups"
 		python compute_tennis_matchups.py \
-			--experiment-base-dir "$TARGET_DIR"
+			--experiment-base-dir "$TARGET_DIR" \
+    	    ${TEST_RUN:+"$ADDED_ARGS"}
 	fi
 
 	if [ $MODEL_NAME == 'occ_det' ]
 	then
 		echo "Computing the LRVB correction for 20 species"
 		python compute_occu_predictions.py \
-			--experiment-base-dir "$TARGET_DIR"
+			--experiment-base-dir "$TARGET_DIR" \
+    	    ${TEST_RUN:+"$ADDED_ARGS"}
 	fi
 
 	if [ $MODEL_NAME == 'potus' ]
 	then
 		echo "Computing the LRVB correction for the final vote share"
 		python compute_potus_predictions.py \
-			--experiment-base-dir "$TARGET_DIR"
+			--experiment-base-dir "$TARGET_DIR" \
+    	    ${TEST_RUN:+"$ADDED_ARGS"}
 	fi
 
 
@@ -95,9 +96,9 @@ for MODEL_NAME in microcredit occ_det tennis potus; do
 		echo "Running PyMC SADVI Full rank"
 		python fit_pymc_sadvi.py\
 		       	--model-name "$MODEL_NAME" \
-			--target-dir "$TARGET_DIR" \
-			--advi-method fullrank_advi \
-			   ${TEST_RUN:+"$ADDED_ARGS"}
+				--target-dir "$TARGET_DIR" \
+				--advi-method fullrank_advi \
+			    ${TEST_RUN:+"$ADDED_ARGS"}
 	fi
 
 	### COVERAGE EXPERIMENTS
@@ -123,21 +124,24 @@ for MODEL_NAME in microcredit occ_det tennis potus; do
 	then
 		echo "Computing the coverage summary for 20 tennis matchups"
 		python summarise_tennis_coverage.py \
-			--coverage-base-dir "$COVERAGE_TARGET_DIR"
+			--coverage-base-dir "$COVERAGE_TARGET_DIR" \
+			${TEST_RUN:+"$ADDED_ARGS"}
 	fi
 
 	if [ $MODEL_NAME == 'occ_det' ]
 	then
 		echo "Computing the coverage summary for 20 species predictions"
 		python summarise_occu_coverage.py \
-			--coverage-base-dir "$COVERAGE_TARGET_DIR"
+			--coverage-base-dir "$COVERAGE_TARGET_DIR" \
+			${TEST_RUN:+"$ADDED_ARGS"}
 	fi
 
 	if [ $MODEL_NAME == 'potus' ]
 	then
 		echo "Computing the coverage summary for the final vote share"
 		python summarise_potus_coverage.py \
-			--coverage-base-dir "$COVERAGE_TARGET_DIR"
+			--coverage-base-dir "$COVERAGE_TARGET_DIR" \
+			${TEST_RUN:+"$ADDED_ARGS"}
 	fi
 
 done

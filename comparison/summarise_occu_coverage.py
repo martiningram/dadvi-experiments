@@ -15,9 +15,11 @@ from argparse import ArgumentParser
 
 
 parser = ArgumentParser()
-parser.add_argument('--coverage-base-dir', required=True)
-args = parser.parse_args()
+parser.add_argument("--coverage-base-dir", required=True)
+parser.add_argument("--test-run", required=False, action="store_true")
+args, _ = parser.parse_known_args()
 
+cg_maxiter = 10 if args.test_run else None
 model = get_occ_det_model_from_pickle(OCC_DET_PICKLE_PATH)
 occ_pickle = pickle.load(open(OCC_DET_PICKLE_PATH, "rb"))
 
@@ -25,9 +27,7 @@ occ_pickle = pickle.load(open(OCC_DET_PICKLE_PATH, "rb"))
 jax_funs = get_jax_functions_from_pymc(model)
 dadvi_funs = build_dadvi_funs(jax_funs["log_posterior_fun"])
 
-reruns = glob(
-    os.path.join(args.coverage_base_dir, '*', 'occ_det', '*.pkl')
-)
+reruns = glob(os.path.join(args.coverage_base_dir, "*", "occ_det", "*.pkl"))
 
 
 def pres_prob(params, sample_loc, species_id):
@@ -40,11 +40,12 @@ def pres_prob(params, sample_loc, species_id):
 
 # Load occ_det results
 occ_pickle = pickle.load(open(OCC_DET_PICKLE_PATH, "rb"))
-
 n_species = 20
 
 np.random.seed(2)
-species_chosen = np.random.choice(occ_pickle["y_df"].shape[1], size=n_species, replace=False)
+species_chosen = np.random.choice(
+    occ_pickle["y_df"].shape[1], size=n_species, replace=False
+)
 
 sample_loc = occ_pickle["X_env_mat"][200]
 
@@ -70,7 +71,7 @@ def compute_quantities(occu_res, dadvi_res):
 
         lrvb_res = (
             dadvi_res.get_frequentist_sd_and_lrvb_correction_of_scalar_valued_function(
-                cur_fun
+                cur_fun, cg_maxiter=cg_maxiter
             )
         )
 
@@ -102,20 +103,20 @@ full_results = list()
 for cur_rerun in tqdm(reruns):
     print(cur_rerun)
 
-    split_path = cur_rerun.split('/')
+    split_path = cur_rerun.split("/")
     m_num = split_path[-3]
-    rerun_num = split_path[-1].split('.')[0]
+    rerun_num = split_path[-1].split(".")[0]
 
     occu_res, dadvi_res = build_dadvi_res(cur_rerun)
 
-    if occu_res['z'].shape[0] < 10:
+    if occu_res["z"].shape[0] < 10:
         continue
 
     try:
         quantities = compute_quantities(occu_res, dadvi_res)
     except Exception as e:
         print(e)
-        print(f'Failed to compute {cur_rerun}. Skipping.')
+        print(f"Failed to compute {cur_rerun}. Skipping.")
         continue
 
     quantities["filename"] = cur_rerun
@@ -125,15 +126,15 @@ for cur_rerun in tqdm(reruns):
 result = pd.DataFrame(full_results)
 
 # Add naming
-names = ['presence_prediction' for _ in range(n_species)]
+names = ["presence_prediction" for _ in range(n_species)]
 indices = list(range(n_species))
 
 names_repeated = [names for _ in range(result.shape[0])]
 indices_repeated = [indices for _ in range(result.shape[0])]
 
-result['names'] = names_repeated
-result['indices'] = indices_repeated
+result["names"] = names_repeated
+result["indices"] = indices_repeated
 
 result = add_columns(result)
 
-save_dfs_by_M(result, 'occ_det', args.coverage_base_dir)
+save_dfs_by_M(result, "occ_det", args.coverage_base_dir)

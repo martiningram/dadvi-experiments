@@ -54,7 +54,8 @@ parser.add_argument(
     default=20,
     help="The number of species to compute predictions for",
 )
-args = parser.parse_args()
+parser.add_argument("--test-run", required=False, action="store_true")
+args, _ = parser.parse_known_args()
 
 EXPERIMENT_BASE_DIR = args.experiment_base_dir
 OCCU_DADVI_PATH = os.path.join(
@@ -69,6 +70,7 @@ occ_pickle = pickle.load(open(OCC_DET_PICKLE_PATH, "rb"))
 # Get the JAX functions
 jax_funs = get_jax_functions_from_pymc(model)
 dadvi_funs = build_dadvi_funs(jax_funs["log_posterior_fun"])
+cg_maxiter = 10 if args.test_run else None
 
 dadvi_res = DADVIResult(
     occ_res["fixed_draws"],
@@ -101,7 +103,7 @@ for species_id in species_chosen:
     cur_start_time = time()
     cur_res = (
         dadvi_res.get_frequentist_sd_and_lrvb_correction_of_scalar_valued_function(
-            cur_fun
+            cur_fun, cg_maxiter=cg_maxiter
         )
     )
     cur_end_time = time()
