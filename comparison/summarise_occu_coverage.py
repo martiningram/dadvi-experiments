@@ -20,6 +20,7 @@ parser.add_argument("--test-run", required=False, action="store_true")
 args, _ = parser.parse_known_args()
 
 cg_maxiter = 10 if args.test_run else None
+fail_if_not_converged = not args.test_run
 model = get_occ_det_model_from_pickle(OCC_DET_PICKLE_PATH)
 occ_pickle = pickle.load(open(OCC_DET_PICKLE_PATH, "rb"))
 
@@ -71,7 +72,9 @@ def compute_quantities(occu_res, dadvi_res):
 
         lrvb_res = (
             dadvi_res.get_frequentist_sd_and_lrvb_correction_of_scalar_valued_function(
-                cur_fun, cg_maxiter=cg_maxiter
+                cur_fun,
+                cg_maxiter=cg_maxiter,
+                fail_if_not_converged=fail_if_not_converged,
             )
         )
 

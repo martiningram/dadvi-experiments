@@ -57,6 +57,7 @@ if __name__ == "__main__":
     dadvi_funs = build_dadvi_funs(jax_funs["log_posterior_fun"])
     encoder = tennis_model["encoder"]
     cg_maxiter = 10 if args.test_run else None
+    fail_if_not_converged = not args.test_run
 
     dadvi_res = DADVIResult(
         tennis_res["fixed_draws"],
@@ -91,6 +92,7 @@ if __name__ == "__main__":
             dadvi_res.get_frequentist_sd_and_lrvb_correction_of_scalar_valued_function(
                 partial(skill_difference, p1_id=p1_id, p2_id=p2_id),
                 cg_maxiter=cg_maxiter,
+                fail_if_not_converged=fail_if_not_converged,
             )
         )
         cur_end_time = time()

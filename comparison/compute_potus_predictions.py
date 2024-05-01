@@ -52,6 +52,7 @@ if __name__ == "__main__":
     )
 
     cg_maxiter = 10 if args.test_run else None
+    fail_if_not_converged = not args.test_run
 
     # Load occ_det results
     occ_res = pickle.load(open(POTUS_DADVI_PATH, "rb"))
@@ -101,7 +102,7 @@ if __name__ == "__main__":
     cur_start_time = time()
     cur_res = (
         dadvi_res.get_frequentist_sd_and_lrvb_correction_of_scalar_valued_function(
-            cur_fun, cg_maxiter=cg_maxiter
+            cur_fun, cg_maxiter=cg_maxiter, fail_if_not_converged=fail_if_not_converged
         )
     )
     cur_end_time = time()

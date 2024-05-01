@@ -71,6 +71,8 @@ occ_pickle = pickle.load(open(OCC_DET_PICKLE_PATH, "rb"))
 jax_funs = get_jax_functions_from_pymc(model)
 dadvi_funs = build_dadvi_funs(jax_funs["log_posterior_fun"])
 cg_maxiter = 10 if args.test_run else None
+fail_if_not_converged = not args.test_run
+
 
 dadvi_res = DADVIResult(
     occ_res["fixed_draws"],
@@ -103,7 +105,7 @@ for species_id in species_chosen:
     cur_start_time = time()
     cur_res = (
         dadvi_res.get_frequentist_sd_and_lrvb_correction_of_scalar_valued_function(
-            cur_fun, cg_maxiter=cg_maxiter
+            cur_fun, cg_maxiter=cg_maxiter, fail_if_not_converged=fail_if_not_converged
         )
     )
     cur_end_time = time()
