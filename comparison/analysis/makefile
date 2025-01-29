@@ -1,13 +1,14 @@
 .PHONY: clean all
 
-# The repo for running the actual experiments.  They should
-# write their output to the $(BLADE_DIR) folder.
-EXP_REPO := /home/rgiordan/Documents/git_repos/DADVI/dadvi-experiments
-BLADE_DIR := $(EXP_REPO)/comparison/blade_runs/
+# Please adjust these paths as needed
+EXP_REPO := /media/martin/external_drive/dadvi-experiments/
+EXP_RESULT_DIR := $(EXP_REPO)/comparison/experiment_runs/november_2024/
+
+MODEL_RESULT_DIR := $(EXP_RESULT_DIR)/models/
+COVERAGE_RESULT_DIR := $(EXP_RESULT_DIR)/coverage/
 
 
 # Postprocessing directory
-
 PP_DIR := $(EXP_REPO)/comparison/analysis
 
 # Set up a virtual environment and ipython kernel
@@ -23,49 +24,41 @@ venv: $(venv)
 
 .PHONY: PosteriorsLoadAndTidyAndSave
 PosteriorsLoadAndTidyAndSave: venv
-	# Note that the ``Jupyter run'' warning is apparently not true.
-	# Maybe this should actually be a script and not a notebook.
 	cd $(PP_DIR) && \
 	. venv/bin/activate && \
-	jupyter execute PosteriorsLoadAndTidyAndSave.ipynb
+	python posteriors_load_tidy_and_save.py\
+		--input-folder $(MODEL_RESULT_DIR)
 
 
-$(BLADE_DIR)/posteriors_tidy.csv:
+$(MODEL_RESULT_DIR)/posteriors_tidy.csv:
 	make PosteriorsLoadAndTidyAndSave
-$(BLADE_DIR)/metadata_tidy.csv:
+$(MODEL_RESULT_DIR)/metadata_tidy.csv:
 	make PosteriorsLoadAndTidyAndSave
-$(BLADE_DIR)/trace_tidy.csv:
+$(MODEL_RESULT_DIR)/trace_tidy.csv:
 	make PosteriorsLoadAndTidyAndSave
-$(BLADE_DIR)/params_tidy.csv:
+$(MODEL_RESULT_DIR)/params_tidy.csv:
 	make PosteriorsLoadAndTidyAndSave
-$(BLADE_DIR)/mcmc_diagnostics_tidy.csv:
+$(MODEL_RESULT_DIR)/mcmc_diagnostics_tidy.csv:
 	make PosteriorsLoadAndTidyAndSave
 
 
-RERUN_DIR := $(ANALYSIS_DIR)/coverage_warm_starts_rerun
-$(RERUN_DIR)/coverage_tidy.csv:
-	make FrequentistCoverageLoadAndTidyAndSave
-$(RERUN_DIR)/coverage_tidy_cg.csv:
+$(COVERAGE_RESULT_DIR)/coverage_tidy.csv:
 	make FrequentistCoverageLoadAndTidyAndSave
 
 .PHONY: FrequentistCoverageLoadAndTidyAndSave
 FrequentistCoverageLoadAndTidyAndSave: venv
-	# Note that the ``Jupyter run'' warning is apparently not true.
-	# Maybe this should actually be a script and not a notebook.
 	cd $(PP_DIR) && \
 	. venv/bin/activate && \
-	jupyter execute FrequentistCoverageLoadAndTidyAndSave.ipynb
-
+	python frequentist_coverage_load_tidy_and_save.py \
+		--input-folder $(COVERAGE_RESULT_DIR)
 
 
 clean:
-	rm $(BLADE_DIR)/posteriors_tidy.csv
-	rm $(BLADE_DIR)/metadata_tidy.csv
-	rm $(BLADE_DIR)/trace_tidy.csv
-	rm $(BLADE_DIR)/params_tidy.csv
-	rm $(BLADE_DIR)/mcmc_diagnostics_tidy.csv
-	rm $(RERUN_DIR)/coverage_tidy.csv
-	rm $(RERUN_DIR)/coverage_tidy_cg.csv
+	rm $(MODEL_RESULT_DIR)/posteriors_tidy.csv
+	rm $(MODEL_RESULT_DIR)/metadata_tidy.csv
+	rm $(MODEL_RESULT_DIR)/trace_tidy.csv
+	rm $(MODEL_RESULT_DIR)/params_tidy.csv
+	rm $(MODEL_RESULT_DIR)/mcmc_diagnostics_tidy.csv
+	rm $(COVERAGE_RESULT_DIR)/coverage_tidy.csv
 
-all:
-	echo TODO: populate this
+all: PosteriorsLoadAndTidyAndSave FrequentistCoverageLoadAndTidyAndSave
