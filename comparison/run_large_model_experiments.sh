@@ -1,5 +1,5 @@
-TARGET_DIR='./experiment_runs/december_2023/'
-COVERAGE_TARGET_DIR='./experiment_runs/coverage/'
+TARGET_DIR='./experiment_runs/november_2024/models/'
+COVERAGE_TARGET_DIR='./experiment_runs/november_2024/coverage/'
 
 # Check tennis data exists and fetch it if not
 if [ ! -f ./data/tennis_atp/atp_players.csv ]; then
@@ -105,5 +105,6 @@ for MODEL_NAME in microcredit occ_det tennis potus; do
 		python summarise_potus_coverage.py \
 			--coverage-base-dir "$COVERAGE_TARGET_DIR"
 	fi
+
 
 done
